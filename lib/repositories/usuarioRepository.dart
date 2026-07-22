@@ -30,4 +30,9 @@ class Usuariorepository {
       (user) => user.nombre == nombre && user.pin == pin,
     );
   }
+
+  Future<UsuarioModel?> getById(int id) async {
+    List<UsuarioModel> users = await getAll();
+    return users.firstWhereOrNull((user) => user.id == id);
+  }
 }

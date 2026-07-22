@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../repositories/usuarioRepository.dart';
 import '../theme/app_colors.dart';
 import 'main_navigation_screen.dart';
 
@@ -10,15 +11,77 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'carlos@ejemplo.com');
-  final _passwordController = TextEditingController(text: '••••••••');
-  bool _obscurePassword = true;
+  final _nombreController = TextEditingController();
+  final _pinController = TextEditingController();
+  final _usuarioRepository = Usuariorepository();
+  bool _obscurePin = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _nombreController.dispose();
+    _pinController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    final nombre = _nombreController.text.trim();
+    final pinText = _pinController.text.trim();
+
+    if (nombre.isEmpty || pinText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor completa todos los campos'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+
+    final pin = int.tryParse(pinText);
+    if (pin == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El PIN debe ser numérico'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final usuario = await _usuarioRepository.login(nombre, pin);
+
+      if (!mounted) return;
+
+      if (usuario != null && usuario.id != null) {
+        // Login exitoso: navegar pasando el userId
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => MainNavigationScreen(userId: usuario.id!),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nombre o PIN incorrectos'),
+            backgroundColor: AppColors.coral,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al iniciar sesión: $e'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -104,9 +167,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 36),
 
-              // Email Input Label
+              // Nombre Input Label
               const Text(
-                'CORREO',
+                'NOMBRE',
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
@@ -116,20 +179,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 10),
               
-              // Email Text Field
+              // Nombre Text Field
               TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
+                controller: _nombreController,
+                keyboardType: TextInputType.text,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 decoration: const InputDecoration(
-                  hintText: 'ejemplo@correo.com',
+                  hintText: 'Tu nombre de usuario',
                 ),
               ),
               const SizedBox(height: 24),
 
-              // Password Input Label
+              // PIN Input Label
               const Text(
-                'CONTRASEÑA',
+                'PIN',
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
@@ -139,21 +202,22 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Password Text Field
+              // PIN Text Field
               TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
+                controller: _pinController,
+                obscureText: _obscurePin,
+                keyboardType: TextInputType.number,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: 'Contraseña',
+                  hintText: 'Tu PIN numérico',
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      _obscurePin ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                       color: AppColors.textSecondary,
                     ),
                     onPressed: () {
                       setState(() {
-                        _obscurePassword = !_obscurePassword;
+                        _obscurePin = !_obscurePin;
                       });
                     },
                   ),
@@ -165,14 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate to dashboard
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const MainNavigationScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.background,
@@ -181,13 +238,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Iniciar sesión',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: AppColors.background,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Text(
+                          'Iniciar sesión',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
