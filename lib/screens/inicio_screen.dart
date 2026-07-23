@@ -181,7 +181,7 @@ class _InicioScreenState extends State<InicioScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'HOLA ,',
+                        'HOLA,',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -191,7 +191,7 @@ class _InicioScreenState extends State<InicioScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$_nombre 👋',
+                        '${LoginScreen.userName} 👋',
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 24,
@@ -218,7 +218,7 @@ class _InicioScreenState extends State<InicioScreen> {
                       ),
                       child: const Center(
                         child: Icon(
-                          Icons.logout_rounded,
+                          Icons.lock_outline_rounded,
                           size: 18,
                           color: AppColors.textSecondary,
                         ),

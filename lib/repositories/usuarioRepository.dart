@@ -1,4 +1,3 @@
-import 'package:collection/collection.dart';
 import '../entities/usuarioModel.dart';
 import '../settings/db_conection.dart';
 
@@ -26,9 +25,12 @@ class Usuariorepository {
   //login
   Future<UsuarioModel?> login(String nombre, int pin) async {
     List<UsuarioModel> users = await getAll();
-    return users.firstWhereOrNull(
-      (user) => user.nombre == nombre && user.pin == pin,
-    );
+    for (var user in users) {
+      if (user.nombre == nombre && user.pin == pin) {
+        return user;
+      }
+    }
+    return null;
   }
 
   Future<UsuarioModel?> getById(int id) async {

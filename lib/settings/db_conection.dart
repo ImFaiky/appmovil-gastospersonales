@@ -51,7 +51,7 @@ class DbConnection {
         nombre TEXT,
         tipo TEXT,
         icono TEXT,
-        color TEXT,
+        color TEXT
       )
     ''');
 
