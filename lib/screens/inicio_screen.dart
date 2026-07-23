@@ -22,9 +22,9 @@ class InicioScreen extends StatelessWidget {
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'HOLA ,',
+                    children: [
+                      const Text(
+                        'HOLA,',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -32,10 +32,10 @@ class InicioScreen extends StatelessWidget {
                           letterSpacing: 1.0,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'Carlos 👋',
-                        style: TextStyle(
+                        '${LoginScreen.userName} 👋',
+                        style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -59,7 +59,7 @@ class InicioScreen extends StatelessWidget {
                       ),
                       child: const Center(
                         child: Icon(
-                          Icons.logout_rounded,
+                          Icons.lock_outline_rounded,
                           size: 18,
                           color: AppColors.textSecondary,
                         ),
