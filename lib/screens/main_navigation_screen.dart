@@ -7,7 +7,8 @@ import 'categorias_screen.dart';
 import 'estadisticas_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({super.key});
+  final int userId;
+  const MainNavigationScreen({super.key, required this.userId});
 
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
@@ -18,13 +19,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   List<Widget> _getScreens() {
     return [
-      InicioScreen(onTabSelected: _onItemTapped),
+      InicioScreen(userId: widget.userId, onTabSelected: _onItemTapped),
       const MovimientosScreen(),
       const CuentasScreen(),
       const CategoriasScreen(),
       const EstadisticasScreen(),
     ];
   }
+
 
   void _onItemTapped(int index) {
     setState(() {

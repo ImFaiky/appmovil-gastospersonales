@@ -1,14 +1,171 @@
 import 'package:flutter/material.dart';
+import 'package:gastosmart/entities/cuentaModel.dart';
+import 'package:gastosmart/entities/movimientoModel.dart';
+import 'package:gastosmart/repositories/cuentaRepository.dart';
+import 'package:gastosmart/repositories/movimientoRepository.dart';
+import 'package:gastosmart/repositories/usuarioRepository.dart';
 import '../theme/app_colors.dart';
 import 'login_screen.dart';
 import 'transaction_form_screen.dart';
 
-class InicioScreen extends StatelessWidget {
+class InicioScreen extends StatefulWidget {
+  final int userId;
   final Function(int)? onTabSelected;
-  const InicioScreen({super.key, this.onTabSelected});
+  const InicioScreen({super.key, required this.userId, this.onTabSelected});
+
+  @override
+  State<InicioScreen> createState() => _InicioScreenState();
+}
+
+class _InicioScreenState extends State<InicioScreen> {
+  final _usuarioRepository = Usuariorepository();
+  final _cuentaRepository = CuentaRepository();
+  final _movimientoRepository = MovimientoRepository();
+
+  String _nombre = '';
+  double _saldoTotal = 0;
+  double _ingresos = 0;
+  double _gastos = 0;
+  double _ahorro = 0;
+  List<Cuentamodel> _cuentas = [];
+  List<Movimientomodel> _movimientosRecientes = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      // 1. Cargar datos del usuario
+      final usuario = await _usuarioRepository.getById(widget.userId);
+      final nombre = usuario?.nombre ?? 'Usuario';
+
+      // 2. Cargar cuentas del usuario
+      final cuentas = await _cuentaRepository.getAll(widget.userId);
+
+      // 3. Calcular saldo total
+      final saldoTotal = await _cuentaRepository.getSaldoTotal(widget.userId);
+
+      // 4. Calcular ingresos y gastos totales sumando de todas las cuentas
+      double ingresos = 0;
+      double gastos = 0;
+      for (var cuenta in cuentas) {
+        if (cuenta.id != null) {
+          ingresos += await _movimientoRepository.getIngresos(cuenta.id!);
+          gastos += await _movimientoRepository.getGastos(cuenta.id!);
+        }
+      }
+
+      // 5. Calcular ahorro
+      final ahorro = ingresos - gastos;
+
+      // 6. Cargar movimientos recientes
+      final movimientos = await _movimientoRepository.getLast(widget.userId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _nombre = nombre;
+        _saldoTotal = saldoTotal;
+        _ingresos = ingresos;
+        _gastos = gastos;
+        _ahorro = ahorro;
+        _cuentas = cuentas;
+        _movimientosRecientes = movimientos;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _formatMoney(double amount) {
+    final isNegative = amount < 0;
+    final absAmount = amount.abs();
+    // Formatear con separadores de miles
+    final parts = absAmount.toStringAsFixed(0).split('');
+    final buffer = StringBuffer();
+    for (int i = 0; i < parts.length; i++) {
+      if (i > 0 && (parts.length - i) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(parts[i]);
+    }
+    return '${isNegative ? '-' : ''}\$${buffer.toString()}';
+  }
+
+  // Obtener icono según el tipo de cuenta
+  IconData _getAccountIcon(String tipo) {
+    switch (tipo.toLowerCase()) {
+      case 'efectivo':
+        return Icons.account_balance_wallet_rounded;
+      case 'banco':
+        return Icons.account_balance_rounded;
+      case 'tarjeta':
+        return Icons.credit_card_rounded;
+      default:
+        return Icons.account_balance_wallet_rounded;
+    }
+  }
+
+  // Obtener color del icono según el tipo de cuenta
+  Color _getAccountIconColor(String tipo) {
+    switch (tipo.toLowerCase()) {
+      case 'efectivo':
+        return AppColors.walletYellow;
+      case 'banco':
+        return AppColors.bankBlue;
+      case 'tarjeta':
+        return AppColors.cardPink;
+      default:
+        return AppColors.mint;
+    }
+  }
+
+  // Obtener icono según el tipo de movimiento
+  IconData _getMovimientoIcon(String tipo) {
+    if (tipo == 'ingreso') {
+      return Icons.trending_up_rounded;
+    } else {
+      return Icons.trending_down_rounded;
+    }
+  }
+
+  // Obtener mes actual en español
+  String _getMesActual() {
+    final meses = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    final now = DateTime.now();
+    return '${meses[now.month - 1]} De ${now.year}';
+  }
+
+  // Formatear fecha corta
+  String _formatFechaCorta(DateTime fecha) {
+    final meses = [
+      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+      'jul', 'ago', 'sep', 'oct', 'nov', 'dic'
+    ];
+    return '${fecha.day}-${meses[fecha.month - 1]}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.mint),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -47,7 +204,9 @@ class InicioScreen extends StatelessWidget {
                     onTap: () {
                       // Logout back to LoginScreen
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (context) => const LoginScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
                       );
                     },
                     child: Container(
@@ -76,7 +235,10 @@ class InicioScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
                   gradient: const LinearGradient(
-                    colors: [AppColors.balanceCardStart, AppColors.balanceCardEnd],
+                    colors: [
+                      AppColors.balanceCardStart,
+                      AppColors.balanceCardEnd,
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -98,9 +260,9 @@ class InicioScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      '\$62,950',
-                      style: TextStyle(
+                    Text(
+                      _formatMoney(_saldoTotal),
+                      style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 38,
                         fontWeight: FontWeight.bold,
@@ -117,7 +279,11 @@ class InicioScreen extends StatelessWidget {
                             children: [
                               Row(
                                 children: const [
-                                  Icon(Icons.trending_up_rounded, color: AppColors.mint, size: 16),
+                                  Icon(
+                                    Icons.trending_up_rounded,
+                                    color: AppColors.mint,
+                                    size: 16,
+                                  ),
                                   SizedBox(width: 6),
                                   Text(
                                     'Ingresos',
@@ -129,9 +295,9 @@ class InicioScreen extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              const Text(
-                                '\$23,700',
-                                style: TextStyle(
+                              Text(
+                                _formatMoney(_ingresos),
+                                style: const TextStyle(
                                   color: AppColors.mint,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -154,7 +320,11 @@ class InicioScreen extends StatelessWidget {
                             children: [
                               Row(
                                 children: const [
-                                  Icon(Icons.trending_down_rounded, color: AppColors.coral, size: 16),
+                                  Icon(
+                                    Icons.trending_down_rounded,
+                                    color: AppColors.coral,
+                                    size: 16,
+                                  ),
                                   SizedBox(width: 6),
                                   Text(
                                     'Gastos',
@@ -166,9 +336,9 @@ class InicioScreen extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              const Text(
-                                '\$13,199',
-                                style: TextStyle(
+                              Text(
+                                _formatMoney(_gastos),
+                                style: const TextStyle(
                                   color: AppColors.coral,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -180,9 +350,9 @@ class InicioScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Julio De 2026',
-                      style: TextStyle(
+                    Text(
+                      _getMesActual(),
+                      style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
                       ),
@@ -196,12 +366,14 @@ class InicioScreen extends StatelessWidget {
               SizedBox(
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
+                  onPressed: () async {
+                    await Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => const TransactionFormScreen(),
                       ),
                     );
+                    // Recargar datos al regresar del formulario
+                    _loadData();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mint,
@@ -243,7 +415,7 @@ class InicioScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      onTabSelected?.call(2); // Cuentas tab
+                      widget.onTabSelected?.call(2); // Cuentas tab
                     },
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.zero,
@@ -260,7 +432,11 @@ class InicioScreen extends StatelessWidget {
                           ),
                         ),
                         SizedBox(width: 4),
-                        Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 16),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textSecondary,
+                          size: 16,
+                        ),
                       ],
                     ),
                   ),
@@ -268,41 +444,42 @@ class InicioScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Accounts Horizontal List
+              // Accounts Horizontal List (datos reales)
               SizedBox(
                 height: 125,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildAccountCard(
-                      icon: Icons.account_balance_wallet_rounded,
-                      iconColor: AppColors.walletYellow,
-                      title: 'Efectivo',
-                      amount: '\$2,400',
-                      isNegative: false,
-                    ),
-                    _buildAccountCard(
-                      icon: Icons.account_balance_rounded,
-                      iconColor: AppColors.bankBlue,
-                      title: 'Banco BBVA',
-                      amount: '\$18,750',
-                      isNegative: false,
-                    ),
-                    _buildAccountCard(
-                      icon: Icons.credit_card_rounded,
-                      iconColor: AppColors.cardPink,
-                      title: 'Tarjeta Visa',
-                      amount: '-\$3,200',
-                      isNegative: true,
-                    ),
-                  ],
-                ),
+                child: _cuentas.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No tienes cuentas registradas',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _cuentas.length,
+                        itemBuilder: (context, index) {
+                          final cuenta = _cuentas[index];
+                          return _buildAccountCard(
+                            icon: _getAccountIcon(cuenta.tipo),
+                            iconColor: _getAccountIconColor(cuenta.tipo),
+                            title: cuenta.nombre,
+                            amount: _formatMoney(cuenta.saldo),
+                            isNegative: cuenta.saldo < 0,
+                          );
+                        },
+                      ),
               ),
               const SizedBox(height: 20),
 
               // Savings Month Banner
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.cardBg.withOpacity(0.4),
                   borderRadius: BorderRadius.circular(16),
@@ -310,8 +487,8 @@ class InicioScreen extends StatelessWidget {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
+                  children: [
+                    const Text(
                       'Ahorro este mes',
                       style: TextStyle(
                         color: AppColors.textSecondary,
@@ -320,9 +497,9 @@ class InicioScreen extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '+\$10,501',
+                      '${_ahorro >= 0 ? '+' : ''}${_formatMoney(_ahorro)}',
                       style: TextStyle(
-                        color: AppColors.mint,
+                        color: _ahorro >= 0 ? AppColors.mint : AppColors.coral,
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                       ),
@@ -346,7 +523,7 @@ class InicioScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      onTabSelected?.call(1); // Movimientos tab
+                      widget.onTabSelected?.call(1); // Movimientos tab
                     },
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.zero,
@@ -363,7 +540,11 @@ class InicioScreen extends StatelessWidget {
                           ),
                         ),
                         SizedBox(width: 4),
-                        Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 16),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textSecondary,
+                          size: 16,
+                        ),
                       ],
                     ),
                   ),
@@ -371,43 +552,45 @@ class InicioScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Recent Transactions List
-              Column(
-                children: [
-                  _buildTransactionItem(
-                    icon: Icons.work_rounded,
-                    iconBgColor: const Color(0xFF2E2421),
-                    iconColor: const Color(0xFFFF8C69),
-                    title: 'Salario julio',
-                    category: 'Salario',
-                    date: '18-jul',
-                    amount: '+\$18,000',
-                    isIncome: true,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildTransactionItem(
-                    icon: Icons.home_rounded,
-                    iconBgColor: const Color(0xFF2C241E),
-                    iconColor: const Color(0xFFFFA500),
-                    title: 'Renta mensual',
-                    category: 'Vivienda',
-                    date: '18-jul',
-                    amount: '-\$4,500',
-                    isIncome: false,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildTransactionItem(
-                    icon: Icons.shopping_cart_rounded,
-                    iconBgColor: const Color(0xFF1B233A),
-                    iconColor: const Color(0xFF4D84FF),
-                    title: 'Supermercado Walmart',
-                    category: 'Alimentación',
-                    date: '17-jul',
-                    amount: '-\$850',
-                    isIncome: false,
-                  ),
-                ],
-              ),
+              // Recent Transactions List (datos reales)
+              _movimientosRecientes.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24.0),
+                        child: Text(
+                          'No hay movimientos recientes',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: _movimientosRecientes.map((movimiento) {
+                        final isIngreso = movimiento.tipo == 'ingreso';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12.0),
+                          child: _buildTransactionItem(
+                            icon: _getMovimientoIcon(movimiento.tipo),
+                            iconBgColor: isIngreso
+                                ? const Color(0xFF1B2E2A)
+                                : const Color(0xFF2E2421),
+                            iconColor: isIngreso
+                                ? AppColors.mint
+                                : AppColors.coral,
+                            title: movimiento.descripcion,
+                            category: movimiento.tipo == 'ingreso'
+                                ? 'Ingreso'
+                                : 'Gasto',
+                            date: _formatFechaCorta(movimiento.fecha),
+                            amount:
+                                '${isIngreso ? '+' : '-'}${_formatMoney(movimiento.monto)}',
+                            isIncome: isIngreso,
+                          ),
+                        );
+                      }).toList(),
+                    ),
             ],
           ),
         ),
@@ -443,9 +626,7 @@ class InicioScreen extends StatelessWidget {
               color: iconColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Center(
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
+            child: Center(child: Icon(icon, color: iconColor, size: 20)),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,7 +648,7 @@ class InicioScreen extends StatelessWidget {
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -500,9 +681,7 @@ class InicioScreen extends StatelessWidget {
               color: iconBgColor,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Center(
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
+            child: Center(child: Icon(icon, color: iconColor, size: 22)),
           ),
           const SizedBox(width: 14),
           // Titles

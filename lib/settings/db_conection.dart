@@ -37,7 +37,7 @@ class DbConnection {
         tipo TEXT,
         monto REAL,
         descripcion TEXT,
-        fecha TEXT,
+        fecha DATETIME,
         cuentaId INTEGER,
         categoriaId INTEGER,
 
