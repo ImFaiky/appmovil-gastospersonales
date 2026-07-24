@@ -15,30 +15,6 @@ class MovimientosScreen extends StatefulWidget {
   State<MovimientosScreen> createState() => _MovimientosScreenState();
 }
 
-class _MockTransaction {
-  final IconData icon;
-  final Color iconBgColor;
-  final Color iconColor;
-  final String title;
-  final String category;
-  final String account;
-  final double amount;
-  final bool isIncome;
-  final DateTime date;
-
-  _MockTransaction({
-    required this.icon,
-    required this.iconBgColor,
-    required this.iconColor,
-    required this.title,
-    required this.category,
-    required this.account,
-    required this.amount,
-    required this.isIncome,
-    required this.date,
-  });
-}
-
 class _MovimientosScreenState extends State<MovimientosScreen> {
   String _selectedFilter = 'Todo'; // 'Todo', 'Gastos', 'Ingresos'
   String? _seleccionCategoria = 'Todas'; // Categorias que seran visualizadas
@@ -46,11 +22,6 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   DateTime? _fechaInicio;
   DateTime? _fechaFin;
   bool _showFilters = false;
-
-  late final List<String> _listaCategorias;
-  late final List<String> _listaCuentas;
-  late final List<_MockTransaction> _allTransactions;
-  List<_MockTransaction> _filteredTransactions = [];
 
   final _searchController = TextEditingController();
 
@@ -63,6 +34,9 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   List<Movimientomodel> _filteredMovimientos = [];
   Map<int, Cuentamodel> _cuentasMap = {};
   Map<int, Map<String, dynamic>> _categoriasMap = {};
+
+  List<String> _listaCategorias = [];
+  List<String> _listaCuentas = [];
   bool _isLoading = true;
 
   @override
@@ -70,134 +44,6 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     super.initState();
     _loadFiltersAndData();
     _searchController.addListener(_onSearchChanged);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    _listaCategorias = [
-      'Todas',
-      'Alimentación',
-      'Transporte',
-      'Salud',
-      'Educación',
-      'Entretenimiento',
-      'Vivienda',
-      'Ropa',
-      'Servicios',
-      'Salario',
-      'Freelance',
-      'Inversiones',
-      'Otros',
-    ];
-
-    _listaCuentas = ['Todas', 'Efectivo', 'Banco BBVA', 'Tarjeta Visa'];
-
-    _allTransactions = [
-      _MockTransaction(
-        icon: Icons.work_rounded,
-        iconBgColor: const Color(0xFF2E2421),
-        iconColor: const Color(0xFFFF8C69),
-        title: 'Salario julio',
-        category: 'Salario',
-        account: 'Banco BBVA',
-        amount: 18000.0,
-        isIncome: true,
-        date: DateTime(2026, 7, 18),
-      ),
-      _MockTransaction(
-        icon: Icons.home_rounded,
-        iconBgColor: const Color(0xFF2C241E),
-        iconColor: const Color(0xFFFFA500),
-        title: 'Renta mensual',
-        category: 'Vivienda',
-        account: 'Banco BBVA',
-        amount: -4500.0,
-        isIncome: false,
-        date: DateTime(2026, 7, 18),
-      ),
-      _MockTransaction(
-        icon: Icons.shopping_cart_rounded,
-        iconBgColor: const Color(0xFF1B233A),
-        iconColor: const Color(0xFF4D84FF),
-        title: 'Supermercado Walmart',
-        category: 'Alimentación',
-        account: 'Efectivo',
-        amount: -850.0,
-        isIncome: false,
-        date: DateTime(2026, 7, 17),
-      ),
-      _MockTransaction(
-        icon: Icons.directions_bus_rounded,
-        iconBgColor: const Color(0xFF1F2B2A),
-        iconColor: const Color(0xFF33D1FF),
-        title: 'Tarjeta de Metro',
-        category: 'Transporte',
-        account: 'Efectivo',
-        amount: -320.0,
-        isIncome: false,
-        date: DateTime(2026, 7, 16),
-      ),
-    ];
-
-    _filteredTransactions = List.from(_allTransactions);
-    _searchController.addListener(_applyFilters);
-  }
-
-  void _applyFilters() {
-    setState(() {
-      final query = _searchController.text.toLowerCase();
-      _filteredTransactions = _allTransactions.where((tx) {
-        // 1. Filter by type
-        if (_selectedFilter == 'Gastos' && tx.isIncome) return false;
-        if (_selectedFilter == 'Ingresos' && !tx.isIncome) return false;
-
-        // 2. Filter by category
-        if (_seleccionCategoria != null &&
-            _seleccionCategoria != 'Todas' &&
-            tx.category != _seleccionCategoria) {
-          return false;
-        }
-
-        // 3. Filter by account
-        if (_seleccionCuenta != null &&
-            _seleccionCuenta != 'Todas' &&
-            tx.account != _seleccionCuenta) {
-          return false;
-        }
-
-        // 4. Filter by date range
-        if (_fechaInicio != null && _fechaFin != null) {
-          final txDate = DateTime(tx.date.year, tx.date.month, tx.date.day);
-          final start = DateTime(
-            _fechaInicio!.year,
-            _fechaInicio!.month,
-            _fechaInicio!.day,
-          );
-          final end = DateTime(
-            _fechaFin!.year,
-            _fechaFin!.month,
-            _fechaFin!.day,
-          );
-          if (txDate.isBefore(start) || txDate.isAfter(end)) {
-            return false;
-          }
-        }
-
-        // 5. Filter by search query
-        if (query.isNotEmpty) {
-          final titleMatch = tx.title.toLowerCase().contains(query);
-          final categoryMatch = tx.category.toLowerCase().contains(query);
-          final accountMatch = tx.account.toLowerCase().contains(query);
-          if (!titleMatch && !categoryMatch && !accountMatch) {
-            return false;
-          }
-        }
-
-        return true;
-      }).toList();
-    });
   }
 
   @override
@@ -222,8 +68,8 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           _cuentasMap = { for (var acc in accounts) acc.id!: acc };
           _categoriasMap = { for (var cat in categoriesResult) cat['id'] as int: cat };
 
-          _listaCuentas = accounts.map((acc) => acc.nombre).toList();
-          _listaCategorias = categoriesResult.map((cat) => cat['nombre'] as String).toSet().toList();
+          _listaCuentas = ['Todas', ...accounts.map((acc) => acc.nombre)];
+          _listaCategorias = ['Todas', ...categoriesResult.map((cat) => cat['nombre'] as String).toSet()];
 
           _allMovimientos = movements;
           _isLoading = false;
@@ -245,7 +91,15 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     // 1. Filter by Search Query
     final query = _searchController.text.trim().toLowerCase();
     if (query.isNotEmpty) {
-      temp = temp.where((mov) => mov.descripcion.toLowerCase().contains(query)).toList();
+      temp = temp.where((mov) {
+        final category = _categoriasMap[mov.categoriaId];
+        final categoryName = category?['nombre'] as String? ?? '';
+        final account = _cuentasMap[mov.cuentaId];
+        final accountName = account?.nombre ?? '';
+        return mov.descripcion.toLowerCase().contains(query) ||
+               categoryName.toLowerCase().contains(query) ||
+               accountName.toLowerCase().contains(query);
+      }).toList();
     }
 
     // 2. Filter by Type (Todo, Gastos, Ingresos)
@@ -256,7 +110,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     }
 
     // 3. Filter by Category
-    if (_seleccionCategoria != null) {
+    if (_seleccionCategoria != null && _seleccionCategoria != 'Todas') {
       temp = temp.where((mov) {
         final cat = _categoriasMap[mov.categoriaId];
         return cat != null && cat['nombre'] == _seleccionCategoria;
@@ -264,7 +118,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     }
 
     // 4. Filter by Account
-    if (_seleccionCuenta != null) {
+    if (_seleccionCuenta != null && _seleccionCuenta != 'Todas') {
       temp = temp.where((mov) {
         final acc = _cuentasMap[mov.cuentaId];
         return acc != null && acc.nombre == _seleccionCuenta;
@@ -272,13 +126,14 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     }
 
     // 5. Filter by Date Range
-    if (_fechaInicio != null) {
+    if (_fechaInicio != null && _fechaFin != null) {
       final start = DateTime(_fechaInicio!.year, _fechaInicio!.month, _fechaInicio!.day);
-      temp = temp.where((mov) => mov.fecha.isAfter(start) || mov.fecha.isAtSameMomentAs(start)).toList();
-    }
-    if (_fechaFin != null) {
       final end = DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day, 23, 59, 59);
-      temp = temp.where((mov) => mov.fecha.isBefore(end) || mov.fecha.isAtSameMomentAs(end)).toList();
+      temp = temp.where((mov) {
+        final txDate = DateTime(mov.fecha.year, mov.fecha.month, mov.fecha.day);
+        return (txDate.isAfter(start) || txDate.isAtSameMomentAs(start)) &&
+               (txDate.isBefore(end) || txDate.isAtSameMomentAs(end));
+      }).toList();
     }
 
     setState(() {
@@ -286,12 +141,43 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     });
   }
 
-  String _formatHeaderDate(DateTime date) {
-    final List<String> days = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
-    final List<String> months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-    final dayName = days[date.weekday % 7];
-    final monthName = months[date.month - 1];
-    return '$dayName ${date.day} DE $monthName';
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final checkDate = DateTime(date.year, date.month, date.day);
+
+    if (checkDate == today) {
+      return 'HOY';
+    } else if (checkDate == yesterday) {
+      return 'AYER';
+    } else {
+      final List<String> months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+      final Map<int, String> daysMap = {
+        1: 'LUNES',
+        2: 'MARTES',
+        3: 'MIÉRCOLES',
+        4: 'JUEVES',
+        5: 'VIERNES',
+        6: 'SÁBADO',
+        7: 'DOMINGO',
+      };
+      final dayStr = daysMap[date.weekday] ?? '';
+      return '$dayStr ${date.day} DE ${months[date.month - 1]}';
+    }
+  }
+
+  String _formatMoney(double amount) {
+    final absAmount = amount.abs();
+    final parts = absAmount.toStringAsFixed(0).split('');
+    final buffer = StringBuffer();
+    for (int i = 0; i < parts.length; i++) {
+      if (i > 0 && (parts.length - i) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(parts[i]);
+    }
+    return buffer.toString();
   }
 
   IconData _getIconData(String iconName) {
@@ -335,9 +221,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     if (_isLoading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(
-            color: AppColors.mint,
-          ),
+          child: CircularProgressIndicator(color: AppColors.mint),
         ),
       );
     }
@@ -474,9 +358,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _showFilters
-                              ? AppColors.mint
-                              : AppColors.border,
+                          color: _showFilters ? AppColors.mint : AppColors.border,
                           width: 1.0,
                         ),
                       ),
@@ -484,18 +366,14 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                         children: [
                           Icon(
                             Icons.tune_rounded,
-                            color: _showFilters
-                                ? AppColors.mint
-                                : AppColors.textSecondary,
+                            color: _showFilters ? AppColors.mint : AppColors.textSecondary,
                             size: 16,
                           ),
                           const SizedBox(width: 6),
                           Text(
                             'Filtros',
                             style: TextStyle(
-                              color: _showFilters
-                                  ? AppColors.mint
-                                  : AppColors.textSecondary,
+                              color: _showFilters ? AppColors.mint : AppColors.textSecondary,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -506,6 +384,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                   ),
                 ],
               ),
+
               if (_showFilters) ...[
                 const SizedBox(height: 16),
                 Row(
@@ -539,7 +418,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
 
               const SizedBox(height: 28),
 
-              // Grouped Transaction list
+              // Grouped Transactions list
               _buildGroupedTransactions(),
             ],
           ),
@@ -570,15 +449,11 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           } else if (hint == 'Cuenta') {
             _seleccionCuenta = value;
           }
-          _applyFilters();
         });
         _applyFilters();
       },
       decoration: InputDecoration(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         filled: true,
         fillColor: AppColors.cardBg,
         enabledBorder: OutlineInputBorder(
@@ -589,10 +464,6 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.mint, width: 1.0),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
       ),
     );
   }
@@ -600,44 +471,32 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   Widget _buildDateRangePicker() {
     final startText = _fechaInicio != null ? '${_fechaInicio!.day}/${_fechaInicio!.month}/${_fechaInicio!.year}' : 'Inicio';
     final endText = _fechaFin != null ? '${_fechaFin!.day}/${_fechaFin!.month}/${_fechaFin!.year}' : 'Fin';
-    return Row(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.calendar_today, color: AppColors.mint, size: 20),
-          onPressed: () async {
-            final picked = await showDateRangePicker(
-              context: context,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
-              builder: (context, child) {
-                return Theme(
-                  data: Theme.of(context).copyWith(
-                    colorScheme: const ColorScheme.dark(
-                      primary: AppColors.mint,
-                      onPrimary: AppColors.background,
-                      surface: AppColors.cardBg,
-                      onSurface: AppColors.textPrimary,
-                    ),
-                  ),
-                  child: child!,
-                );
-              },
+    return InkWell(
+      onTap: () async {
+        final picked = await showDateRangePicker(
+          context: context,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: const ColorScheme.dark(
+                  primary: AppColors.mint,
+                  onPrimary: AppColors.background,
+                  surface: AppColors.cardBg,
+                  onSurface: AppColors.textPrimary,
+                ),
+              ),
+              child: child!,
             );
-            if (picked != null) {
-              setState(() {
-                _fechaInicio = picked.start;
-                _fechaFin = picked.end;
-              });
-              _applyFilters();
-            }
           },
         );
         if (picked != null) {
           setState(() {
             _fechaInicio = picked.start;
             _fechaFin = picked.end;
-            _applyFilters();
           });
+          _applyFilters();
         }
       },
       borderRadius: BorderRadius.circular(12),
@@ -646,13 +505,20 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
+          color: AppColors.cardBg,
         ),
-        Expanded(
-          child: Text(
-            '$startText - $endText',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            overflow: TextOverflow.ellipsis,
-          ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today, color: AppColors.mint, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$startText - $endText',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -671,6 +537,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
+        padding: const EdgeInsets.symmetric(vertical: 12),
       ),
       child: const Text('Aplicar', style: TextStyle(fontWeight: FontWeight.bold)),
     );
@@ -682,7 +549,6 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
       onTap: () {
         setState(() {
           _selectedFilter = title;
-          _applyFilters();
         });
         _applyFilters();
       },
@@ -721,38 +587,24 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
       );
     }
 
-    // Grouping movements by date (year-month-day)
+    // Grouping movements by date header (HOY, AYER, or formatted)
     final Map<String, List<Movimientomodel>> grouped = {};
     for (var mov in _filteredMovimientos) {
-      final dateKey = '${mov.fecha.year}-${mov.fecha.month}-${mov.fecha.day}';
-      if (!grouped.containsKey(dateKey)) {
-        grouped[dateKey] = [];
+      final dateStr = _formatDateHeader(mov.fecha);
+      if (!grouped.containsKey(dateStr)) {
+        grouped[dateStr] = [];
       }
-      grouped[dateKey]!.add(mov);
+      grouped[dateStr]!.add(mov);
     }
-
-    // Convert grouped Map to Sorted List of dates
-    final sortedKeys = grouped.keys.toList()
-      ..sort((a, b) {
-        final aParts = a.split('-').map(int.parse).toList();
-        final bParts = b.split('-').map(int.parse).toList();
-        final aDate = DateTime(aParts[0], aParts[1], aParts[2]);
-        final bDate = DateTime(bParts[0], bParts[1], bParts[2]);
-        return bDate.compareTo(aDate); // Descending (most recent first)
-      });
 
     List<Widget> listItems = [];
 
-    for (var dateKey in sortedKeys) {
-      final movementsInDate = grouped[dateKey]!;
-      final dateParts = dateKey.split('-').map(int.parse).toList();
-      final dateObj = DateTime(dateParts[0], dateParts[1], dateParts[2]);
-
-      listItems.add(_buildDateHeader(_formatHeaderDate(dateObj)));
+    grouped.forEach((dateStr, movements) {
+      listItems.add(_buildDateHeader(dateStr));
       listItems.add(const SizedBox(height: 12));
 
-      for (int i = 0; i < movementsInDate.length; i++) {
-        final mov = movementsInDate[i];
+      for (int i = 0; i < movements.length; i++) {
+        final mov = movements[i];
         final isIncome = mov.tipo == 'ingreso';
         final account = _cuentasMap[mov.cuentaId];
         final category = _categoriasMap[mov.categoriaId];
@@ -765,50 +617,17 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
         listItems.add(
           _buildTransactionRowItem(
             icon: _getIconData(categoryIconStr),
-            iconBgColor: _getColor(categoryColorStr).withOpacity(0.12),
+            iconBgColor: _getColor(categoryColorStr).withAlpha(30),
             iconColor: _getColor(categoryColorStr),
             title: mov.descripcion,
             subtitle: '$categoryName · $accountName',
-            amount: '${isIncome ? '+' : '-'}\$${mov.monto.toStringAsFixed(2)}',
+            amount: '${isIncome ? '+' : '-'}\$${_formatMoney(mov.monto)}',
             isIncome: isIncome,
             movement: mov,
           ),
         );
 
-        if (i < movementsInDate.length - 1) {
-          listItems.add(const SizedBox(height: 12));
-        }
-      }
-      listItems.add(const SizedBox(height: 24));
-    }
-
-    // Group transactions by day
-    Map<String, List<_MockTransaction>> grouped = {};
-    for (var tx in _filteredTransactions) {
-      String dateStr = _formatDateHeader(tx.date);
-      grouped.putIfAbsent(dateStr, () => []);
-      grouped[dateStr]!.add(tx);
-    }
-
-    List<Widget> listItems = [];
-    grouped.forEach((dateStr, transactions) {
-      listItems.add(_buildDateHeader(dateStr));
-      listItems.add(const SizedBox(height: 12));
-      for (int i = 0; i < transactions.length; i++) {
-        final tx = transactions[i];
-        listItems.add(
-          _buildTransactionRowItem(
-            icon: tx.icon,
-            iconBgColor: tx.iconBgColor,
-            iconColor: tx.iconColor,
-            title: tx.title,
-            subtitle: '${tx.category} · ${tx.account}',
-            amount: '${tx.amount >= 0 ? '+' : ''}\$${_formatMoney(tx.amount)}',
-            isIncome: tx.isIncome,
-            onDelete: () => _showDeleteDialog(context, tx),
-          ),
-        );
-        if (i < transactions.length - 1) {
+        if (i < movements.length - 1) {
           listItems.add(const SizedBox(height: 12));
         }
       }
@@ -819,58 +638,6 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: listItems,
     );
-  }
-
-  String _formatDateHeader(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final checkDate = DateTime(date.year, date.month, date.day);
-
-    if (checkDate == today) {
-      return 'HOY';
-    } else if (checkDate == yesterday) {
-      return 'AYER';
-    } else {
-      final months = [
-        'ENE',
-        'FEB',
-        'MAR',
-        'ABR',
-        'MAY',
-        'JUN',
-        'JUL',
-        'AGO',
-        'SEP',
-        'OCT',
-        'NOV',
-        'DIC',
-      ];
-      final daysMap = {
-        1: 'LUNES',
-        2: 'MARTES',
-        3: 'MIÉRCOLES',
-        4: 'JUEVES',
-        5: 'VIERNES',
-        6: 'SÁBADO',
-        7: 'DOMINGO',
-      };
-      String dayStr = daysMap[date.weekday] ?? '';
-      return '$dayStr ${date.day} DE ${months[date.month - 1]}';
-    }
-  }
-
-  String _formatMoney(double amount) {
-    final absAmount = amount.abs();
-    final parts = absAmount.toStringAsFixed(0).split('');
-    final buffer = StringBuffer();
-    for (int i = 0; i < parts.length; i++) {
-      if (i > 0 && (parts.length - i) % 3 == 0) {
-        buffer.write(',');
-      }
-      buffer.write(parts[i]);
-    }
-    return buffer.toString();
   }
 
   Widget _buildDateHeader(String dateString) {
