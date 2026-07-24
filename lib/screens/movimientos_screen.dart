@@ -11,6 +11,16 @@ class MovimientosScreen extends StatefulWidget {
 
 class _MovimientosScreenState extends State<MovimientosScreen> {
   String _selectedFilter = 'Todo'; // 'Todo', 'Gastos', 'Ingresos'
+  String? _seleccionCategoria; //Categorias que seran visualizadas
+  String? _seleccionCuenta; //Cuentas
+  DateTime? _fechaInicio;
+  DateTime? _fechaFin;
+  bool _showFilters = false;
+
+  //Para almacenar los datos
+  List<String> _listaCategorias = [];
+  List<String> _listaCuentas = [];
+
   final _searchController = TextEditingController();
 
   @override
@@ -62,7 +72,11 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.add, color: AppColors.background, size: 22),
+                      icon: const Icon(
+                        Icons.add,
+                        color: AppColors.background,
+                        size: 22,
+                      ),
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -82,18 +96,30 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Buscar transacción...',
-                  hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 15),
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+                  hintStyle: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: AppColors.textSecondary,
+                  ),
                   filled: true,
                   fillColor: AppColors.cardBg,
                   contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.border, width: 1.0),
+                    borderSide: const BorderSide(
+                      color: AppColors.border,
+                      width: 1.0,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.border, width: 1.0),
+                    borderSide: const BorderSide(
+                      color: AppColors.border,
+                      width: 1.0,
+                    ),
                   ),
                 ),
               ),
@@ -117,11 +143,15 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
+
                   // General Filters Button
                   GestureDetector(
                     onTap: () => _showFilterBottomSheet(context),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
@@ -129,7 +159,11 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                       ),
                       child: Row(
                         children: const [
-                          Icon(Icons.tune_rounded, color: AppColors.textSecondary, size: 16),
+                          Icon(
+                            Icons.tune_rounded,
+                            color: AppColors.textSecondary,
+                            size: 16,
+                          ),
                           SizedBox(width: 6),
                           Text(
                             'Filtros',
@@ -145,6 +179,32 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                   ),
                 ],
               ),
+              if (_showFilters)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDropdown(
+                        'Categoría',
+                        _seleccionCategoria,
+                        _listaCategorias,
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildDropdown(
+                        'Cuenta',
+                        _seleccionCuenta,
+                        _listaCuentas,
+                      ),
+                    ),
+                  ],
+                ),
+              Row(
+                children: [
+                  Expanded(child: _buildDateRangePicker()),
+                  Expanded(child: _buildApplyFiltersButton()),
+                ],
+              ),
+
               const SizedBox(height: 28),
 
               // Grouped Transaction list
@@ -153,6 +213,76 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  //Para la seleccion de los filtros muestre el listado
+  Widget _buildDropdown(
+    String hint,
+    String? selectedValue,
+    List<String> items,
+  ) {
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      hint: Text(hint),
+      items: items.map((item) {
+        return DropdownMenuItem(value: item, child: Text(item));
+      }).toList(),
+      onChanged: (value) {
+        setState(() {
+          if (hint == 'Categoría') {
+            _seleccionCategoria = value;
+          } else if (hint == 'Cuenta') {
+            _seleccionCuenta = value;
+          }
+        });
+      },
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+      ),
+    );
+  }
+
+  // Para el widget DateRangePicker, nos permita seleccionar fechas
+  Widget _buildDateRangePicker() {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.calendar_today),
+          onPressed: () async {
+            final picked = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now(),
+            );
+            if (picked != null) {
+              setState(() {
+                _fechaInicio = picked.start;
+                _fechaFin = picked.end;
+              });
+            }
+          },
+        ),
+        Text(
+          '${_fechaInicio?.year}/${_fechaInicio?.month}/${_fechaInicio?.day} - ${_fechaFin?.year}/${_fechaFin?.month}/${_fechaFin?.day}',
+        ),
+      ],
+    );
+  }
+
+  //Para el boton de aplicar filtros
+  Widget _buildApplyFiltersButton() {
+    return ElevatedButton(
+      onPressed: () {
+        setState(() {
+          _showFilters = false;
+        });
+      },
+      child: const Text('Aplicar filtros'),
     );
   }
 
@@ -170,7 +300,9 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           color: isActive ? AppColors.cardBg : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isActive ? AppColors.mint.withOpacity(0.3) : AppColors.border,
+            color: isActive
+                ? AppColors.mint.withOpacity(0.3)
+                : AppColors.border,
             width: 1.0,
           ),
         ),
@@ -206,7 +338,8 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
       );
     }
     if (_selectedFilter == 'Todo' || _selectedFilter == 'Gastos') {
-      if (saturdayItems.isNotEmpty) saturdayItems.add(const SizedBox(height: 12));
+      if (saturdayItems.isNotEmpty)
+        saturdayItems.add(const SizedBox(height: 12));
       saturdayItems.add(
         _buildTransactionRowItem(
           icon: Icons.home_rounded,
@@ -328,9 +461,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
               color: iconBgColor,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
+            child: Center(child: Icon(icon, color: iconColor, size: 22)),
           ),
           const SizedBox(width: 14),
           // Titles
@@ -389,10 +520,15 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: AppColors.cardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Text(
             'Eliminar movimiento',
-            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: Text(
             '¿Estás seguro de que deseas eliminar "$title"?',
@@ -401,7 +537,10 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -414,7 +553,13 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                   ),
                 );
               },
-              child: const Text('Eliminar', style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Eliminar',
+                style: TextStyle(
+                  color: AppColors.coral,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         );
@@ -441,10 +586,17 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                 children: [
                   const Text(
                     'Filtros avanzados',
-                    style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.textSecondary,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -452,18 +604,30 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
               const SizedBox(height: 16),
               const Text(
                 'CUENTA',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
-                children: ['Todas', 'Efectivo', 'Banco BBVA', 'Tarjeta Visa'].map((account) {
-                  return Chip(
-                    backgroundColor: AppColors.background,
-                    label: Text(account, style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
-                    side: const BorderSide(color: AppColors.border),
-                  );
-                }).toList(),
+                children: ['Todas', 'Efectivo', 'Banco BBVA', 'Tarjeta Visa']
+                    .map((account) {
+                      return Chip(
+                        backgroundColor: AppColors.background,
+                        label: Text(
+                          account,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        side: const BorderSide(color: AppColors.border),
+                      );
+                    })
+                    .toList(),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -482,9 +646,14 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.background,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  child: const Text('Aplicar filtros', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Aplicar filtros',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
