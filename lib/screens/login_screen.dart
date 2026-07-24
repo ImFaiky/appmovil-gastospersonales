@@ -4,8 +4,6 @@ import '../theme/app_colors.dart';
 import 'main_navigation_screen.dart';
 import '../repositories/usuarioRepository.dart';
 import '../entities/usuarioModel.dart';
-import '../repositories/cuentaRepository.dart';
-import '../entities/cuentaModel.dart';
 
 enum LoginState {
   loginPin,
@@ -90,23 +88,73 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  Future<void> _checkNameAndContinue(String name) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final existingUsers = await _usuarioRepository.getAll();
+      final exists = existingUsers.any((u) => u.nombre.trim().toLowerCase() == cleanName.toLowerCase());
+      if (exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('El usuario "$cleanName" ya existe. Por favor, elige otro nombre.'),
+              backgroundColor: AppColors.coral,
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _state = LoginState.onboardingPin;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al verificar el nombre: $e')),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _saveUserAndFinish() async {
     final name = _nameController.text.trim().isEmpty ? 'Andrés' : _nameController.text.trim();
     final pinStr = _pinController.text.isEmpty ? '111111' : _pinController.text;
-    final pinInt = int.tryParse(pinStr) ?? 111111;
 
-    final newUser = UsuarioModel(nombre: name, pin: pinInt);
-    
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
+      final existingUsers = await _usuarioRepository.getAll();
+      final exists = existingUsers.any((u) => u.nombre.trim().toLowerCase() == name.toLowerCase());
+      if (exists) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('El usuario "$name" ya existe. Elige otro nombre.'),
+              backgroundColor: AppColors.coral,
+            ),
+          );
+        }
+        return;
+      }
+
+      final newUser = UsuarioModel(nombre: name, pin: pinStr);
       final insertedId = await _usuarioRepository.insert(newUser);
       LoginScreen.userName = name;
-
-      // Seed default accounts for the new user
-      final cuentaRepo = CuentaRepository();
-      await cuentaRepo.insert(Cuentamodel(nombre: 'Efectivo', tipo: 'Efectivo', saldo: 0.0, color: '0xFFFBBF24', usuarioId: insertedId));
-      await cuentaRepo.insert(Cuentamodel(nombre: 'Banco BBVA', tipo: 'Banco', saldo: 0.0, color: '0xFF60A5FA', usuarioId: insertedId));
-      await cuentaRepo.insert(Cuentamodel(nombre: 'Tarjeta Visa', tipo: 'Tarjeta', saldo: 0.0, color: '0xFFF87171', usuarioId: insertedId));
-      await cuentaRepo.insert(Cuentamodel(nombre: 'Ahorros', tipo: 'Ahorros', saldo: 0.0, color: '0xFF34D399', usuarioId: insertedId));
       
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -117,8 +165,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar el usuario y cuentas: $e')),
+          SnackBar(content: Text('Error al guardar el usuario: $e')),
         );
       }
     }
@@ -450,7 +501,7 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
             _usuarios.isNotEmpty && _selectedUserIndex < _usuarios.length
-                ? _usuarios[_selectedUserIndex].pin.toString().length
+                ? _usuarios[_selectedUserIndex].pin.length
                 : 6,
             (index) {
               bool isFilled = _enteredPin.length > index;
@@ -647,7 +698,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleKeypadTap(String digit) {
     if (_usuarios.isEmpty) return;
     final selectedUser = _usuarios[_selectedUserIndex];
-    final correctPin = selectedUser.pin.toString();
+    final correctPin = selectedUser.pin;
     if (_enteredPin.length >= correctPin.length) return;
     
     setState(() {
@@ -657,7 +708,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // Check if PIN is fully entered
     if (_enteredPin.length == correctPin.length) {
-      if (int.tryParse(_enteredPin) == selectedUser.pin) {
+      if (_enteredPin == selectedUser.pin) {
         LoginScreen.userName = selectedUser.nombre;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -803,7 +854,7 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 56,
           child: ElevatedButton(
             onPressed: name.isNotEmpty
-                ? () => setState(() => _state = LoginState.onboardingPin)
+                ? () => _checkNameAndContinue(name)
                 : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.mint,
