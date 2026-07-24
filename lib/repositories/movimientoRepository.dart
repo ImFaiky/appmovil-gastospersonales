@@ -72,4 +72,24 @@ class MovimientoRepository {
     movimientos.sort((a, b) => b.fecha.compareTo(a.fecha));
     return movimientos.take(8).toList();
   }
+
+  Future<List<Movimientomodel>> getAllForUser(int userId) async {
+    // 1. Obtener todas las cuentas del usuario para tener sus IDs
+    final cuentasResult = await db.getAll('cuentas');
+    final idsCuentasUsuario = cuentasResult
+        .where((map) => map['usuarioId'] == userId)
+        .map((map) => map['id'] as int)
+        .toSet();
+
+    // 2. Obtener todos los movimientos y filtrar los que pertenecen a esas cuentas
+    final movimientosResult = await db.getAll(tableName);
+    final movimientos = movimientosResult
+        .map((map) => Movimientomodel.fromMap(map))
+        .where((movimiento) => idsCuentasUsuario.contains(movimiento.cuentaId))
+        .toList();
+
+    // 3. Ordenar por fecha desc (más recientes primero)
+    movimientos.sort((a, b) => b.fecha.compareTo(a.fecha));
+    return movimientos;
+  }
 }

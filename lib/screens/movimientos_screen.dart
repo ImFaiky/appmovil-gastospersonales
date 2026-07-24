@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'transaction_form_screen.dart';
+import '../entities/movimientoModel.dart';
+import '../repositories/movimientoRepository.dart';
+import '../repositories/cuentaRepository.dart';
+import '../entities/cuentaModel.dart';
+import '../settings/db_conection.dart';
 
 class MovimientosScreen extends StatefulWidget {
-  const MovimientosScreen({super.key});
+  final int userId;
+  const MovimientosScreen({super.key, required this.userId});
 
   @override
   State<MovimientosScreen> createState() => _MovimientosScreenState();
@@ -23,14 +29,166 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
 
   final _searchController = TextEditingController();
 
+  // Database variables
+  final _movimientoRepository = MovimientoRepository();
+  final _cuentaRepository = CuentaRepository();
+  final _db = DbConnection();
+
+  List<Movimientomodel> _allMovimientos = [];
+  List<Movimientomodel> _filteredMovimientos = [];
+  Map<int, Cuentamodel> _cuentasMap = {};
+  Map<int, Map<String, dynamic>> _categoriasMap = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFiltersAndData();
+    _searchController.addListener(_onSearchChanged);
+  }
+
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged() {
+    _applyFilters();
+  }
+
+  Future<void> _loadFiltersAndData() async {
+    try {
+      final accounts = await _cuentaRepository.getAll(widget.userId);
+      final categoriesResult = await _db.getAll('categorias');
+      final movements = await _movimientoRepository.getAllForUser(widget.userId);
+
+      if (mounted) {
+        setState(() {
+          _cuentasMap = { for (var acc in accounts) acc.id!: acc };
+          _categoriasMap = { for (var cat in categoriesResult) cat['id'] as int: cat };
+
+          _listaCuentas = accounts.map((acc) => acc.nombre).toList();
+          _listaCategorias = categoriesResult.map((cat) => cat['nombre'] as String).toSet().toList();
+
+          _allMovimientos = movements;
+          _isLoading = false;
+        });
+        _applyFilters();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _applyFilters() {
+    List<Movimientomodel> temp = List.from(_allMovimientos);
+
+    // 1. Filter by Search Query
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      temp = temp.where((mov) => mov.descripcion.toLowerCase().contains(query)).toList();
+    }
+
+    // 2. Filter by Type (Todo, Gastos, Ingresos)
+    if (_selectedFilter == 'Gastos') {
+      temp = temp.where((mov) => mov.tipo == 'gasto').toList();
+    } else if (_selectedFilter == 'Ingresos') {
+      temp = temp.where((mov) => mov.tipo == 'ingreso').toList();
+    }
+
+    // 3. Filter by Category
+    if (_seleccionCategoria != null) {
+      temp = temp.where((mov) {
+        final cat = _categoriasMap[mov.categoriaId];
+        return cat != null && cat['nombre'] == _seleccionCategoria;
+      }).toList();
+    }
+
+    // 4. Filter by Account
+    if (_seleccionCuenta != null) {
+      temp = temp.where((mov) {
+        final acc = _cuentasMap[mov.cuentaId];
+        return acc != null && acc.nombre == _seleccionCuenta;
+      }).toList();
+    }
+
+    // 5. Filter by Date Range
+    if (_fechaInicio != null) {
+      final start = DateTime(_fechaInicio!.year, _fechaInicio!.month, _fechaInicio!.day);
+      temp = temp.where((mov) => mov.fecha.isAfter(start) || mov.fecha.isAtSameMomentAs(start)).toList();
+    }
+    if (_fechaFin != null) {
+      final end = DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day, 23, 59, 59);
+      temp = temp.where((mov) => mov.fecha.isBefore(end) || mov.fecha.isAtSameMomentAs(end)).toList();
+    }
+
+    setState(() {
+      _filteredMovimientos = temp;
+    });
+  }
+
+  String _formatHeaderDate(DateTime date) {
+    final List<String> days = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+    final List<String> months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    final dayName = days[date.weekday % 7];
+    final monthName = months[date.month - 1];
+    return '$dayName ${date.day} DE $monthName';
+  }
+
+  IconData _getIconData(String iconName) {
+    switch (iconName) {
+      case 'shopping_cart_rounded':
+        return Icons.shopping_cart_rounded;
+      case 'directions_bus_rounded':
+        return Icons.directions_bus_rounded;
+      case 'medical_services_rounded':
+        return Icons.medical_services_rounded;
+      case 'menu_book_rounded':
+        return Icons.menu_book_rounded;
+      case 'movie_creation_rounded':
+        return Icons.movie_creation_rounded;
+      case 'home_rounded':
+        return Icons.home_rounded;
+      case 'checkroom_rounded':
+        return Icons.checkroom_rounded;
+      case 'lightbulb_rounded':
+        return Icons.lightbulb_rounded;
+      case 'inventory_2_rounded':
+        return Icons.inventory_2_rounded;
+      case 'work_rounded':
+        return Icons.work_rounded;
+      case 'laptop_chromebook_rounded':
+        return Icons.laptop_chromebook_rounded;
+      case 'trending_up_rounded':
+        return Icons.trending_up_rounded;
+      default:
+        return Icons.help_outline_rounded;
+    }
+  }
+
+  Color _getColor(String colorStr) {
+    final intColor = int.tryParse(colorStr) ?? 0xFFFFFFFF;
+    return Color(intColor);
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.mint,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -44,8 +202,8 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         'Movimientos',
                         style: TextStyle(
                           color: AppColors.textPrimary,
@@ -53,10 +211,10 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        '25 registros',
-                        style: TextStyle(
+                        '${_filteredMovimientos.length} registros',
+                        style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
                         ),
@@ -77,12 +235,13 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                         color: AppColors.background,
                         size: 22,
                       ),
-                      onPressed: () {
-                        Navigator.of(context).push(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (context) => const TransactionFormScreen(),
+                            builder: (context) => TransactionFormScreen(userId: widget.userId),
                           ),
                         );
+                        _loadFiltersAndData();
                       },
                     ),
                   ),
@@ -146,7 +305,11 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
 
                   // General Filters Button
                   GestureDetector(
-                    onTap: () => _showFilterBottomSheet(context),
+                    onTap: () {
+                      setState(() {
+                        _showFilters = !_showFilters;
+                      });
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -224,9 +387,13 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   ) {
     return DropdownButtonFormField<String>(
       value: selectedValue,
-      hint: Text(hint),
+      hint: Text(hint, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+      dropdownColor: AppColors.cardBg,
       items: items.map((item) {
-        return DropdownMenuItem(value: item, child: Text(item));
+        return DropdownMenuItem(
+          value: item,
+          child: Text(item, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+        );
       }).toList(),
       onChanged: (value) {
         setState(() {
@@ -236,10 +403,15 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
             _seleccionCuenta = value;
           }
         });
+        _applyFilters();
       },
       decoration: InputDecoration(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
@@ -249,26 +421,46 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
 
   // Para el widget DateRangePicker, nos permita seleccionar fechas
   Widget _buildDateRangePicker() {
+    final startText = _fechaInicio != null ? '${_fechaInicio!.day}/${_fechaInicio!.month}/${_fechaInicio!.year}' : 'Inicio';
+    final endText = _fechaFin != null ? '${_fechaFin!.day}/${_fechaFin!.month}/${_fechaFin!.year}' : 'Fin';
     return Row(
       children: [
         IconButton(
-          icon: const Icon(Icons.calendar_today),
+          icon: const Icon(Icons.calendar_today, color: AppColors.mint, size: 20),
           onPressed: () async {
             final picked = await showDateRangePicker(
               context: context,
               firstDate: DateTime(2020),
               lastDate: DateTime.now(),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.dark(
+                      primary: AppColors.mint,
+                      onPrimary: AppColors.background,
+                      surface: AppColors.cardBg,
+                      onSurface: AppColors.textPrimary,
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
             );
             if (picked != null) {
               setState(() {
                 _fechaInicio = picked.start;
                 _fechaFin = picked.end;
               });
+              _applyFilters();
             }
           },
         ),
-        Text(
-          '${_fechaInicio?.year}/${_fechaInicio?.month}/${_fechaInicio?.day} - ${_fechaFin?.year}/${_fechaFin?.month}/${_fechaFin?.day}',
+        Expanded(
+          child: Text(
+            '$startText - $endText',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -282,7 +474,14 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           _showFilters = false;
         });
       },
-      child: const Text('Aplicar filtros'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.mint,
+        foregroundColor: AppColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: const Text('Aplicar', style: TextStyle(fontWeight: FontWeight.bold)),
     );
   }
 
@@ -293,6 +492,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
         setState(() {
           _selectedFilter = title;
         });
+        _applyFilters();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -319,93 +519,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
   }
 
   Widget _buildGroupedTransactions() {
-    // Basic conditional lists for mock filtering demonstration
-    List<Widget> listItems = [];
-
-    // Group 1: SÁBADO 18 DE JUL
-    List<Widget> saturdayItems = [];
-    if (_selectedFilter == 'Todo' || _selectedFilter == 'Ingresos') {
-      saturdayItems.add(
-        _buildTransactionRowItem(
-          icon: Icons.work_rounded,
-          iconBgColor: const Color(0xFF2E2421),
-          iconColor: const Color(0xFFFF8C69),
-          title: 'Salario julio',
-          subtitle: 'Salario · Banco BBVA',
-          amount: '+\$18,000',
-          isIncome: true,
-        ),
-      );
-    }
-    if (_selectedFilter == 'Todo' || _selectedFilter == 'Gastos') {
-      if (saturdayItems.isNotEmpty)
-        saturdayItems.add(const SizedBox(height: 12));
-      saturdayItems.add(
-        _buildTransactionRowItem(
-          icon: Icons.home_rounded,
-          iconBgColor: const Color(0xFF2C241E),
-          iconColor: const Color(0xFFFFA500),
-          title: 'Renta mensual',
-          subtitle: 'Vivienda · Banco BBVA',
-          amount: '-\$4,500',
-          isIncome: false,
-        ),
-      );
-    }
-
-    if (saturdayItems.isNotEmpty) {
-      listItems.add(_buildDateHeader('SÁBADO 18 DE JUL'));
-      listItems.add(const SizedBox(height: 12));
-      listItems.addAll(saturdayItems);
-      listItems.add(const SizedBox(height: 24));
-    }
-
-    // Group 2: VIERNES 17 DE JUL
-    List<Widget> fridayItems = [];
-    if (_selectedFilter == 'Todo' || _selectedFilter == 'Gastos') {
-      fridayItems.add(
-        _buildTransactionRowItem(
-          icon: Icons.shopping_cart_rounded,
-          iconBgColor: const Color(0xFF1B233A),
-          iconColor: const Color(0xFF4D84FF),
-          title: 'Supermercado Walmart',
-          subtitle: 'Alimentación · Efectivo',
-          amount: '-\$850',
-          isIncome: false,
-        ),
-      );
-    }
-
-    if (fridayItems.isNotEmpty) {
-      listItems.add(_buildDateHeader('VIERNES 17 DE JUL'));
-      listItems.add(const SizedBox(height: 12));
-      listItems.addAll(fridayItems);
-      listItems.add(const SizedBox(height: 24));
-    }
-
-    // Group 3: JUEVES 16 DE JUL
-    List<Widget> thursdayItems = [];
-    if (_selectedFilter == 'Todo' || _selectedFilter == 'Gastos') {
-      thursdayItems.add(
-        _buildTransactionRowItem(
-          icon: Icons.directions_bus_rounded,
-          iconBgColor: const Color(0xFF1F2B2A),
-          iconColor: const Color(0xFF33D1FF),
-          title: 'Tarjeta de Metro',
-          subtitle: 'Transporte · Efectivo',
-          amount: '-\$320',
-          isIncome: false,
-        ),
-      );
-    }
-
-    if (thursdayItems.isNotEmpty) {
-      listItems.add(_buildDateHeader('JUEVES 16 DE JUL'));
-      listItems.add(const SizedBox(height: 12));
-      listItems.addAll(thursdayItems);
-    }
-
-    if (listItems.isEmpty) {
+    if (_filteredMovimientos.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40.0),
@@ -415,6 +529,67 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
           ),
         ),
       );
+    }
+
+    // Grouping movements by date (year-month-day)
+    final Map<String, List<Movimientomodel>> grouped = {};
+    for (var mov in _filteredMovimientos) {
+      final dateKey = '${mov.fecha.year}-${mov.fecha.month}-${mov.fecha.day}';
+      if (!grouped.containsKey(dateKey)) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey]!.add(mov);
+    }
+
+    // Convert grouped Map to Sorted List of dates
+    final sortedKeys = grouped.keys.toList()
+      ..sort((a, b) {
+        final aParts = a.split('-').map(int.parse).toList();
+        final bParts = b.split('-').map(int.parse).toList();
+        final aDate = DateTime(aParts[0], aParts[1], aParts[2]);
+        final bDate = DateTime(bParts[0], bParts[1], bParts[2]);
+        return bDate.compareTo(aDate); // Descending (most recent first)
+      });
+
+    List<Widget> listItems = [];
+
+    for (var dateKey in sortedKeys) {
+      final movementsInDate = grouped[dateKey]!;
+      final dateParts = dateKey.split('-').map(int.parse).toList();
+      final dateObj = DateTime(dateParts[0], dateParts[1], dateParts[2]);
+
+      listItems.add(_buildDateHeader(_formatHeaderDate(dateObj)));
+      listItems.add(const SizedBox(height: 12));
+
+      for (int i = 0; i < movementsInDate.length; i++) {
+        final mov = movementsInDate[i];
+        final isIncome = mov.tipo == 'ingreso';
+        final account = _cuentasMap[mov.cuentaId];
+        final category = _categoriasMap[mov.categoriaId];
+
+        final accountName = account?.nombre ?? 'Cuenta';
+        final categoryName = category?.containsKey('nombre') == true ? category!['nombre'] : 'Otros';
+        final categoryColorStr = category?.containsKey('color') == true ? category!['color'] : '0xFFFFFFFF';
+        final categoryIconStr = category?.containsKey('icono') == true ? category!['icono'] : 'help_outline_rounded';
+
+        listItems.add(
+          _buildTransactionRowItem(
+            icon: _getIconData(categoryIconStr),
+            iconBgColor: _getColor(categoryColorStr).withOpacity(0.12),
+            iconColor: _getColor(categoryColorStr),
+            title: mov.descripcion,
+            subtitle: '$categoryName · $accountName',
+            amount: '${isIncome ? '+' : '-'}\$${mov.monto.toStringAsFixed(2)}',
+            isIncome: isIncome,
+            movement: mov,
+          ),
+        );
+
+        if (i < movementsInDate.length - 1) {
+          listItems.add(const SizedBox(height: 12));
+        }
+      }
+      listItems.add(const SizedBox(height: 24));
     }
 
     return Column(
@@ -443,6 +618,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     required String subtitle,
     required String amount,
     required bool isIncome,
+    required Movimientomodel movement,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -505,7 +681,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
               color: AppColors.textSecondary.withOpacity(0.5),
               size: 20,
             ),
-            onPressed: () => _showDeleteDialog(context, title),
+            onPressed: () => _showDeleteDialog(context, movement),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -514,7 +690,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     );
   }
 
-  void _showDeleteDialog(BuildContext context, String title) {
+  void _showDeleteDialog(BuildContext context, Movimientomodel mov) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -531,7 +707,7 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
             ),
           ),
           content: Text(
-            '¿Estás seguro de que deseas eliminar "$title"?',
+            '¿Estás seguro de que deseas eliminar "${mov.descripcion}"?',
             style: const TextStyle(color: AppColors.textSecondary),
           ),
           actions: [
@@ -543,15 +719,39 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
               ),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Movimiento "$title" eliminado'),
-                    backgroundColor: AppColors.coral,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+              onPressed: () async {
+                try {
+                  // 1. Get the account to update its balance
+                  final account = _cuentasMap[mov.cuentaId];
+                  if (account != null) {
+                    final isIncome = mov.tipo == 'ingreso';
+                    final newBalance = isIncome ? (account.saldo - mov.monto) : (account.saldo + mov.monto);
+                    account.saldo = newBalance;
+                    await _cuentaRepository.update(account);
+                  }
+                  
+                  // 2. Delete the movement
+                  await _movimientoRepository.delete(mov.id!);
+                  
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Movimiento "${mov.descripcion}" eliminado'),
+                        backgroundColor: AppColors.coral,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    _loadFiltersAndData();
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error al eliminar: $e')),
+                    );
+                  }
+                }
               },
               child: const Text(
                 'Eliminar',
