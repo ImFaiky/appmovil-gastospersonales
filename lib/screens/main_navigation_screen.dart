@@ -19,9 +19,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   List<Widget> _getScreens() {
     return [
-      InicioScreen(userId: widget.userId, onTabSelected: _onItemTapped),
+      InicioScreen(
+        userId: widget.userId,
+        onTabSelected: _onItemTapped,
+        isActive: _selectedIndex == 0,
+      ),
       const MovimientosScreen(),
-      const CuentasScreen(),
+      CuentasScreen(userId: widget.userId),
       const CategoriasScreen(),
       const EstadisticasScreen(),
     ];

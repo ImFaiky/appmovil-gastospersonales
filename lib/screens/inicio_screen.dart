@@ -11,7 +11,13 @@ import 'transaction_form_screen.dart';
 class InicioScreen extends StatefulWidget {
   final int userId;
   final Function(int)? onTabSelected;
-  const InicioScreen({super.key, required this.userId, this.onTabSelected});
+  final bool isActive;
+  const InicioScreen({
+    super.key,
+    required this.userId,
+    this.onTabSelected,
+    this.isActive = false,
+  });
 
   @override
   State<InicioScreen> createState() => _InicioScreenState();
@@ -35,6 +41,14 @@ class _InicioScreenState extends State<InicioScreen> {
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void didUpdateWidget(covariant InicioScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadData();
+    }
   }
 
   Future<void> _loadData() async {
