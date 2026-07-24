@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../entities/movimientoModel.dart';
+import '../repositories/movimientoRepository.dart';
+import '../repositories/cuentaRepository.dart';
+import '../entities/cuentaModel.dart';
+import '../settings/db_conection.dart';
 
 class TransactionFormScreen extends StatefulWidget {
+  final int userId;
   final String? initialType;
-  const TransactionFormScreen({super.key, this.initialType});
+  const TransactionFormScreen({super.key, required this.userId, this.initialType});
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -14,36 +20,61 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   final _amountController = TextEditingController(text: '0.00');
   
   late bool _isGasto;
-  String _selectedAccount = 'Efectivo';
-  String _selectedCategory = 'Alimentación';
   DateTime _selectedDate = DateTime.now();
 
-  final List<String> _accounts = ['Efectivo', 'Banco BBVA', 'Tarjeta Visa'];
-  
-  final List<String> _gastosCategories = [
-    'Alimentación',
-    'Transporte',
-    'Salud',
-    'Educación',
-    'Entretenimiento',
-    'Vivienda',
-    'Ropa',
-    'Servicios',
-    'Otros'
-  ];
+  // Database variables
+  final _db = DbConnection();
+  final _cuentaRepository = CuentaRepository();
+  final _movimientoRepository = MovimientoRepository();
 
-  final List<String> _ingresosCategories = [
-    'Salario',
-    'Freelance',
-    'Inversiones',
-    'Otros'
-  ];
+  List<Cuentamodel> _realAccounts = [];
+  List<Map<String, dynamic>> _realCategories = [];
+  int? _selectedAccountId;
+  int? _selectedCategoryId;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _isGasto = widget.initialType != 'Ingreso';
-    _selectedCategory = _isGasto ? _gastosCategories[0] : _ingresosCategories[0];
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final accounts = await _cuentaRepository.getAll(widget.userId);
+      final categoriesResult = await _db.getAll('categorias');
+
+      if (mounted) {
+        setState(() {
+          _realAccounts = accounts;
+          _realCategories = categoriesResult;
+          _isLoading = false;
+
+          // Set default selected account ID
+          if (_realAccounts.isNotEmpty) {
+            _selectedAccountId = _realAccounts[0].id;
+          }
+
+          // Set default category ID based on type
+          final activeCats = _getActiveCategories();
+          if (activeCats.isNotEmpty) {
+            _selectedCategoryId = activeCats[0]['id'] as int;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> _getActiveCategories() {
+    final targetType = _isGasto ? 'gasto' : 'ingreso';
+    return _realCategories.where((cat) => cat['tipo'] == targetType).toList();
   }
 
   @override
@@ -82,7 +113,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<String> activeCategories = _isGasto ? _gastosCategories : _ingresosCategories;
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.mint),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -143,7 +180,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                             decoration: const InputDecoration(
                               hintText: '0.00',
                               hintStyle: TextStyle(color: AppColors.textSecondary),
-                              border: InputBorder.none,
+                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
                               contentPadding: EdgeInsets.zero,
@@ -174,7 +211,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         onTap: () {
                           setState(() {
                             _isGasto = true;
-                            _selectedCategory = _gastosCategories[0];
+                            final activeCats = _getActiveCategories();
+                            if (activeCats.isNotEmpty) {
+                              _selectedCategoryId = activeCats[0]['id'] as int;
+                            }
                           });
                         },
                         child: Container(
@@ -201,7 +241,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         onTap: () {
                           setState(() {
                             _isGasto = false;
-                            _selectedCategory = _ingresosCategories[0];
+                            final activeCats = _getActiveCategories();
+                            if (activeCats.isNotEmpty) {
+                              _selectedCategoryId = activeCats[0]['id'] as int;
+                            }
                           });
                         },
                         child: Container(
@@ -267,22 +310,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   border: Border.all(color: AppColors.inputBorder, width: 1.5),
                 ),
                 child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedAccount,
+                  child: DropdownButton<int>(
+                    value: _selectedAccountId,
                     dropdownColor: AppColors.cardBg,
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
                     style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                    onChanged: (String? newValue) {
+                    onChanged: (int? newValue) {
                       if (newValue != null) {
                         setState(() {
-                          _selectedAccount = newValue;
+                          _selectedAccountId = newValue;
                         });
                       }
                     },
-                    items: _accounts.map<DropdownMenuItem<String>>((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
+                    items: _realAccounts.map<DropdownMenuItem<int>>((Cuentamodel value) {
+                      return DropdownMenuItem<int>(
+                        value: value.id,
+                        child: Text(value.nombre),
                       );
                     }).toList(),
                   ),
@@ -309,22 +352,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   border: Border.all(color: AppColors.inputBorder, width: 1.5),
                 ),
                 child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedCategory,
+                  child: DropdownButton<int>(
+                    value: _selectedCategoryId,
                     dropdownColor: AppColors.cardBg,
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
                     style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                    onChanged: (String? newValue) {
+                    onChanged: (int? newValue) {
                       if (newValue != null) {
                         setState(() {
-                          _selectedCategory = newValue;
+                          _selectedCategoryId = newValue;
                         });
                       }
                     },
-                    items: activeCategories.map<DropdownMenuItem<String>>((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
+                    items: _getActiveCategories().map<DropdownMenuItem<int>>((Map<String, dynamic> value) {
+                      return DropdownMenuItem<int>(
+                        value: value['id'] as int,
+                        child: Text(value['nombre'] as String),
                       );
                     }).toList(),
                   ),
@@ -370,15 +413,79 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Transacción guardada exitosamente'),
-                        backgroundColor: AppColors.mint,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
+                  onPressed: () async {
+                    final concept = _conceptController.text.trim();
+                    final amountStr = _amountController.text.trim();
+                    final amount = double.tryParse(amountStr) ?? 0.0;
+
+                    if (concept.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Por favor, ingresa un concepto')),
+                      );
+                      return;
+                    }
+
+                    if (amount <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Por favor, ingresa un monto válido mayor a 0')),
+                      );
+                      return;
+                    }
+
+                    if (_selectedAccountId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Por favor, selecciona una cuenta')),
+                      );
+                      return;
+                    }
+
+                    if (_selectedCategoryId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Por favor, selecciona una categoría')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      // 1. Create movement
+                      final newMovement = Movimientomodel(
+                        tipo: _isGasto ? 'gasto' : 'ingreso',
+                        monto: amount,
+                        descripcion: concept,
+                        fecha: _selectedDate,
+                        cuentaId: _selectedAccountId!,
+                        categoriaId: _selectedCategoryId!,
+                      );
+
+                      // 2. Insert to Database
+                      await _movimientoRepository.insert(newMovement);
+
+                      // 3. Update Account Balance
+                      final updatedAccount = _realAccounts.firstWhere((acc) => acc.id == _selectedAccountId);
+                      if (_isGasto) {
+                        updatedAccount.saldo -= amount;
+                      } else {
+                        updatedAccount.saldo += amount;
+                      }
+                      await _cuentaRepository.update(updatedAccount);
+
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Transacción guardada exitosamente'),
+                            backgroundColor: AppColors.mint,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error al guardar la transacción: $e')),
+                        );
+                      }
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mint,

@@ -383,7 +383,7 @@ class _InicioScreenState extends State<InicioScreen> {
                   onPressed: () async {
                     await Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => const TransactionFormScreen(),
+                        builder: (context) => TransactionFormScreen(userId: widget.userId),
                       ),
                     );
                     // Recargar datos al regresar del formulario

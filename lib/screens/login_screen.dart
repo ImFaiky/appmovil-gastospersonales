@@ -4,6 +4,8 @@ import '../theme/app_colors.dart';
 import 'main_navigation_screen.dart';
 import '../repositories/usuarioRepository.dart';
 import '../entities/usuarioModel.dart';
+import '../repositories/cuentaRepository.dart';
+import '../entities/cuentaModel.dart';
 
 enum LoginState {
   loginPin,
@@ -98,6 +100,13 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final insertedId = await _usuarioRepository.insert(newUser);
       LoginScreen.userName = name;
+
+      // Seed default accounts for the new user
+      final cuentaRepo = CuentaRepository();
+      await cuentaRepo.insert(Cuentamodel(nombre: 'Efectivo', tipo: 'Efectivo', saldo: 2400.0, color: '0xFFFBBF24', usuarioId: insertedId));
+      await cuentaRepo.insert(Cuentamodel(nombre: 'Banco BBVA', tipo: 'Banco', saldo: 18750.0, color: '0xFF60A5FA', usuarioId: insertedId));
+      await cuentaRepo.insert(Cuentamodel(nombre: 'Tarjeta Visa', tipo: 'Tarjeta', saldo: -3200.0, color: '0xFFF87171', usuarioId: insertedId));
+      await cuentaRepo.insert(Cuentamodel(nombre: 'Ahorros', tipo: 'Ahorros', saldo: 0.0, color: '0xFF34D399', usuarioId: insertedId));
       
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -109,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar el usuario: $e')),
+          SnackBar(content: Text('Error al guardar el usuario y cuentas: $e')),
         );
       }
     }
