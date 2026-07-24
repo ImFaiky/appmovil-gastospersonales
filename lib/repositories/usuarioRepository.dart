@@ -35,6 +35,11 @@ class Usuariorepository {
 
   Future<UsuarioModel?> getById(int id) async {
     List<UsuarioModel> users = await getAll();
-    return users.firstWhereOrNull((user) => user.id == id);
+    for (var user in users) {
+      if (user.id == id) {
+        return user;
+      }
+    }
+    return null;
   }
 }
