@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../entities/categoriaModel.dart';
+import '../repositories/categoriaRepository.dart';
 
 class CategoryFormScreen extends StatefulWidget {
   const CategoryFormScreen({super.key});
@@ -10,6 +12,7 @@ class CategoryFormScreen extends StatefulWidget {
 
 class _CategoryFormScreenState extends State<CategoryFormScreen> {
   final _nameController = TextEditingController();
+  final CategoriaRepository _repository = CategoriaRepository();
   bool _isGasto = true;
 
   IconData _selectedIcon = Icons.shopping_cart_rounded;
@@ -45,6 +48,31 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _guardarCategoria() async {
+
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ingrese el nombre de la categoría"),
+        ),
+      );
+      return;
+    }
+
+    CategoriaModel categoria = CategoriaModel(
+      nombre: _nameController.text.trim(),
+      tipo: _isGasto ? "gasto" : "ingreso",
+      icono: _selectedIcon.codePoint.toString(),
+      color: _selectedColor.value.toString(),
+    );
+
+    await _repository.insert(categoria);
+
+    if (!mounted) return;
+
+    Navigator.pop(context, true);
   }
 
   @override
@@ -274,16 +302,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Categoría guardada exitosamente'),
-                        backgroundColor: AppColors.mint,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
+                  onPressed: _guardarCategoria,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.background,

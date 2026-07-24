@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../entities/cuentaModel.dart';
+import '../repositories/cuentaRepository.dart';
 
 class AccountFormScreen extends StatefulWidget {
-  const AccountFormScreen({super.key});
+  final int userId;
+  final Cuentamodel? account;
+  const AccountFormScreen({super.key, required this.userId, this.account});
 
   @override
   State<AccountFormScreen> createState() => _AccountFormScreenState();
 }
 
 class _AccountFormScreenState extends State<AccountFormScreen> {
+  final _cuentaRepository = CuentaRepository();
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController(text: '0.00');
 
@@ -30,6 +35,125 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.account != null) {
+      final acc = widget.account!;
+      _nameController.text = acc.nombre;
+      _balanceController.text = acc.saldo.toStringAsFixed(2);
+      _selectedIcon = _getIconFromTipo(acc.tipo);
+      try {
+        _selectedColor = Color(int.parse(acc.color));
+      } catch (_) {
+        _selectedColor = _getColorFromTipo(acc.tipo);
+      }
+    }
+  }
+
+  IconData _getIconFromTipo(String tipo) {
+    switch (tipo) {
+      case 'Billetera':
+      case 'efectivo':
+        return Icons.account_balance_wallet_rounded;
+      case 'Banco':
+      case 'banco':
+        return Icons.account_balance_rounded;
+      case 'Tarjeta':
+      case 'tarjeta':
+        return Icons.credit_card_rounded;
+      case 'Ahorro':
+      case 'ahorro':
+      case 'ahorros':
+        return Icons.savings_rounded;
+      default:
+        return Icons.account_balance_wallet_rounded;
+    }
+  }
+
+  Color _getColorFromTipo(String tipo) {
+    switch (tipo) {
+      case 'Billetera':
+      case 'efectivo':
+        return AppColors.walletYellow;
+      case 'Banco':
+      case 'banco':
+        return AppColors.bankBlue;
+      case 'Tarjeta':
+      case 'tarjeta':
+        return AppColors.cardPink;
+      case 'Ahorro':
+      case 'ahorro':
+      case 'ahorros':
+        return AppColors.mint;
+      default:
+        return AppColors.walletYellow;
+    }
+  }
+
+  String _getTipoFromIcon(IconData icon) {
+    if (icon == Icons.account_balance_wallet_rounded) return 'Billetera';
+    if (icon == Icons.account_balance_rounded) return 'Banco';
+    if (icon == Icons.credit_card_rounded) return 'Tarjeta';
+    if (icon == Icons.savings_rounded) return 'Ahorro';
+    return 'Billetera';
+  }
+
+  Future<void> _saveAccount() async {
+    final name = _nameController.text.trim();
+    final balanceText = _balanceController.text.trim();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, ingresa el nombre de la cuenta'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+
+    final saldo = double.tryParse(balanceText) ?? 0.0;
+    final tipo = _getTipoFromIcon(_selectedIcon);
+    final colorVal = _selectedColor.toARGB32().toString();
+
+    try {
+      if (widget.account == null) {
+        // Create Mode
+        final newAccount = Cuentamodel(
+          nombre: name,
+          tipo: tipo,
+          saldo: saldo,
+          color: colorVal,
+          usuarioId: widget.userId,
+        );
+        await _cuentaRepository.insert(newAccount);
+      } else {
+        // Edit Mode
+        final updatedAccount = Cuentamodel(
+          id: widget.account!.id,
+          nombre: name,
+          tipo: tipo,
+          saldo: saldo,
+          color: colorVal,
+          usuarioId: widget.userId,
+        );
+        await _cuentaRepository.update(updatedAccount);
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error al guardar la cuenta'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _balanceController.dispose();
@@ -38,11 +162,12 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.account != null;
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Nueva cuenta',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
+        title: Text(
+          isEditing ? 'Editar cuenta' : 'Nueva cuenta',
+          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -78,9 +203,9 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
               const SizedBox(height: 24),
 
               // Initial Balance Input
-              const Text(
-                'SALDO INICIAL',
-                style: TextStyle(
+              Text(
+                isEditing ? 'SALDO ACTUAL' : 'SALDO INICIAL',
+                style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -125,7 +250,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                       width: 68,
                       height: 68,
                       decoration: BoxDecoration(
-                        color: isSelected ? _selectedColor.withOpacity(0.15) : AppColors.cardBg,
+                        color: isSelected ? _selectedColor.withAlpha(38) : AppColors.cardBg,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isSelected ? _selectedColor : AppColors.border,
@@ -192,7 +317,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                         boxShadow: [
                           if (isSelected)
                             BoxShadow(
-                              color: color.withOpacity(0.4),
+                              color: color.withAlpha(102),
                               blurRadius: 8,
                               spreadRadius: 2,
                             ),
@@ -215,16 +340,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Cuenta guardada exitosamente'),
-                        backgroundColor: AppColors.mint,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
+                  onPressed: _saveAccount,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.background,
@@ -233,9 +349,9 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Guardar cuenta',
-                    style: TextStyle(
+                  child: Text(
+                    isEditing ? 'Guardar cambios' : 'Guardar cuenta',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
