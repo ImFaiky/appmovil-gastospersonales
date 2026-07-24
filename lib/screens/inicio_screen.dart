@@ -117,28 +117,40 @@ class _InicioScreenState extends State<InicioScreen> {
   // Obtener icono según el tipo de cuenta
   IconData _getAccountIcon(String tipo) {
     switch (tipo.toLowerCase()) {
+      case 'billetera':
       case 'efectivo':
         return Icons.account_balance_wallet_rounded;
       case 'banco':
         return Icons.account_balance_rounded;
       case 'tarjeta':
         return Icons.credit_card_rounded;
+      case 'ahorro':
+      case 'ahorros':
+        return Icons.savings_rounded;
       default:
         return Icons.account_balance_wallet_rounded;
     }
   }
 
   // Obtener color del icono según el tipo de cuenta
-  Color _getAccountIconColor(String tipo) {
-    switch (tipo.toLowerCase()) {
-      case 'efectivo':
-        return AppColors.walletYellow;
-      case 'banco':
-        return AppColors.bankBlue;
-      case 'tarjeta':
-        return AppColors.cardPink;
-      default:
-        return AppColors.mint;
+  Color _getAccountIconColor(String colorStr, String tipo) {
+    try {
+      return Color(int.parse(colorStr));
+    } catch (_) {
+      switch (tipo.toLowerCase()) {
+        case 'billetera':
+        case 'efectivo':
+          return AppColors.walletYellow;
+        case 'banco':
+          return AppColors.bankBlue;
+        case 'tarjeta':
+          return AppColors.cardPink;
+        case 'ahorro':
+        case 'ahorros':
+          return AppColors.mint;
+        default:
+          return AppColors.walletYellow;
+      }
     }
   }
 
@@ -478,7 +490,7 @@ class _InicioScreenState extends State<InicioScreen> {
                           final cuenta = _cuentas[index];
                           return _buildAccountCard(
                             icon: _getAccountIcon(cuenta.tipo),
-                            iconColor: _getAccountIconColor(cuenta.tipo),
+                            iconColor: _getAccountIconColor(cuenta.color, cuenta.tipo),
                             title: cuenta.nombre,
                             amount: _formatMoney(cuenta.saldo),
                             isNegative: cuenta.saldo < 0,

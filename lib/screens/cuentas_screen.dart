@@ -7,7 +7,8 @@ import 'account_form_screen.dart';
 
 class CuentasScreen extends StatefulWidget {
   final int userId;
-  const CuentasScreen({super.key, required this.userId});
+  final bool isActive;
+  const CuentasScreen({super.key, required this.userId, this.isActive = false});
 
   @override
   State<CuentasScreen> createState() => _CuentasScreenState();
@@ -26,6 +27,14 @@ class _CuentasScreenState extends State<CuentasScreen> {
   void initState() {
     super.initState();
     _loadCuentas();
+  }
+
+  @override
+  void didUpdateWidget(covariant CuentasScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadCuentas();
+    }
   }
 
   Future<void> _loadCuentas() async {
