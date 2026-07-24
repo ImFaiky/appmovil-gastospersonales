@@ -103,9 +103,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Seed default accounts for the new user
       final cuentaRepo = CuentaRepository();
-      await cuentaRepo.insert(Cuentamodel(nombre: 'Efectivo', tipo: 'Efectivo', saldo: 2400.0, color: '0xFFFBBF24', usuarioId: insertedId));
-      await cuentaRepo.insert(Cuentamodel(nombre: 'Banco BBVA', tipo: 'Banco', saldo: 18750.0, color: '0xFF60A5FA', usuarioId: insertedId));
-      await cuentaRepo.insert(Cuentamodel(nombre: 'Tarjeta Visa', tipo: 'Tarjeta', saldo: -3200.0, color: '0xFFF87171', usuarioId: insertedId));
+      await cuentaRepo.insert(Cuentamodel(nombre: 'Efectivo', tipo: 'Efectivo', saldo: 0.0, color: '0xFFFBBF24', usuarioId: insertedId));
+      await cuentaRepo.insert(Cuentamodel(nombre: 'Banco BBVA', tipo: 'Banco', saldo: 0.0, color: '0xFF60A5FA', usuarioId: insertedId));
+      await cuentaRepo.insert(Cuentamodel(nombre: 'Tarjeta Visa', tipo: 'Tarjeta', saldo: 0.0, color: '0xFFF87171', usuarioId: insertedId));
       await cuentaRepo.insert(Cuentamodel(nombre: 'Ahorros', tipo: 'Ahorros', saldo: 0.0, color: '0xFF34D399', usuarioId: insertedId));
       
       if (mounted) {

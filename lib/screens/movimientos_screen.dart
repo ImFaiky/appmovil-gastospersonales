@@ -9,7 +9,8 @@ import '../settings/db_conection.dart';
 
 class MovimientosScreen extends StatefulWidget {
   final int userId;
-  const MovimientosScreen({super.key, required this.userId});
+  final bool isActive;
+  const MovimientosScreen({super.key, required this.userId, this.isActive = false});
 
   @override
   State<MovimientosScreen> createState() => _MovimientosScreenState();
@@ -44,6 +45,14 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     super.initState();
     _loadFiltersAndData();
     _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant MovimientosScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadFiltersAndData();
+    }
   }
 
   @override
