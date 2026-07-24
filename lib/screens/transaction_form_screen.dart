@@ -87,9 +87,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
+      initialDate: _selectedDate.isAfter(DateTime.now()) ? DateTime.now() : _selectedDate,
       firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
+      lastDate: DateTime.now(),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -312,6 +312,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<int>(
                     value: _selectedAccountId,
+                    hint: Text(
+                      _realAccounts.isEmpty ? 'Crea una cuenta primero' : 'Selecciona una cuenta',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                    ),
                     dropdownColor: AppColors.cardBg,
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
                     style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
@@ -354,6 +358,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<int>(
                     value: _selectedCategoryId,
+                    hint: const Text(
+                      'Selecciona una categoría',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                    ),
                     dropdownColor: AppColors.cardBg,
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
                     style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
@@ -421,6 +429,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     if (concept.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Por favor, ingresa un concepto')),
+                      );
+                      return;
+                    }
+
+                    final now = DateTime.now();
+                    final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
+                    if (_selectedDate.isAfter(today)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('No se permiten fechas posteriores al día actual')),
                       );
                       return;
                     }

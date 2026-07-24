@@ -42,7 +42,7 @@ class DbConnection {
       CREATE TABLE usuario (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT,
-        pin INTEGER
+        pin TEXT
       )
     ''');
     String sqlCuenta = ('''
@@ -83,12 +83,25 @@ class DbConnection {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute(sqlUsuario);
         await db.execute(sqlCuenta);
         await db.execute(sqlMovimientos);
         await db.execute(sqlCategorias);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          try {
+            await db.execute("ALTER TABLE usuario RENAME TO usuario_old;");
+            await db.execute(sqlUsuario);
+            await db.execute("INSERT INTO usuario (id, nombre, pin) SELECT id, nombre, CAST(pin AS TEXT) FROM usuario_old;");
+            await db.execute("DROP TABLE usuario_old;");
+          } catch (_) {
+            await db.execute("DROP TABLE IF EXISTS usuario;");
+            await db.execute(sqlUsuario);
+          }
+        }
       },
     );
   }

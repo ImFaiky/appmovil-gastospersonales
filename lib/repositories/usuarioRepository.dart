@@ -23,7 +23,7 @@ class Usuariorepository {
   }
 
   //login
-  Future<UsuarioModel?> login(String nombre, int pin) async {
+  Future<UsuarioModel?> login(String nombre, String pin) async {
     List<UsuarioModel> users = await getAll();
     for (var user in users) {
       if (user.nombre == nombre && user.pin == pin) {
