@@ -96,13 +96,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final newUser = UsuarioModel(nombre: name, pin: pinInt);
     
     try {
-      await _usuarioRepository.insert(newUser);
+      final insertedId = await _usuarioRepository.insert(newUser);
       LoginScreen.userName = name;
       
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => const MainNavigationScreen(),
+            builder: (context) => MainNavigationScreen(userId: insertedId),
           ),
         );
       }
@@ -652,7 +652,7 @@ class _LoginScreenState extends State<LoginScreen> {
         LoginScreen.userName = selectedUser.nombre;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => const MainNavigationScreen(),
+            builder: (context) => MainNavigationScreen(userId: selectedUser.id!),
           ),
         );
       } else {

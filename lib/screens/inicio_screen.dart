@@ -191,7 +191,7 @@ class _InicioScreenState extends State<InicioScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${LoginScreen.userName} 👋',
+                        '$_nombre 👋',
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 24,
