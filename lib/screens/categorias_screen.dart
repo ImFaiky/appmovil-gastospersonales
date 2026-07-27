@@ -151,12 +151,13 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.add, color: AppColors.background, size: 22),
-                      onPressed: () {
-                        Navigator.of(context).push(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (context) => const CategoryFormScreen(),
                           ),
                         );
+                        _cargarCategorias();
                       },
                     ),
                   ),
@@ -278,8 +279,8 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                   final item = activeCategories[index];
                   return _buildCategoryGridItem(
                     name: item.nombre,
-                    icon: Icons.category,
-                    iconColor: Colors.blue,
+                    icon: _obtenerIcono(item.icono),
+                    iconColor: _obtenerColor(item.color),
                     uses: '',
                   );
                 },
@@ -290,6 +291,17 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
       ),
     );
   }
+
+  IconData _obtenerIcono(String icono) {
+  return IconData(
+    int.parse(icono),
+    fontFamily: 'MaterialIcons',
+  );
+}
+
+Color _obtenerColor(String color) {
+  return Color(int.parse(color));
+}
 
   Widget _buildCategoryGridItem({
     required String name,
