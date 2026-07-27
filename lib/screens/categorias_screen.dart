@@ -278,7 +278,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                 itemBuilder: (context, index) {
                   final item = activeCategories[index];
                   return _buildCategoryGridItem(
-                    name: item.nombre,
+                    categoria: item,
                     icon: _obtenerIcono(item.icono),
                     iconColor: _obtenerColor(item.color),
                     uses: '',
@@ -304,7 +304,7 @@ Color _obtenerColor(String color) {
 }
 
   Widget _buildCategoryGridItem({
-    required String name,
+    required CategoriaModel categoria,
     required IconData icon,
     required Color iconColor,
     required String uses,
@@ -339,7 +339,7 @@ Color _obtenerColor(String color) {
               const SizedBox(height: 12),
               // Category Name
               Text(
-                name,
+                categoria.nombre,
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -365,9 +365,45 @@ Color _obtenerColor(String color) {
         // Top Right Delete Circular Cross Badge
         Positioned(
           top: 8,
+          left: 8,
+          child: GestureDetector(
+            onTap: () async {
+
+              bool? actualizado = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CategoryFormScreen(
+                    categoria: categoria,
+                  ),
+                ),
+              );
+
+              if (actualizado == true) {
+                _cargarCategorias();
+              }
+            },
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: AppColors.background.withOpacity(0.8),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.edit,
+                size: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+
+        Positioned(
+          top: 8,
           right: 8,
           child: GestureDetector(
-            onTap: () => _showDeleteCategoryDialog(context, name),
+            onTap: () => _showDeleteCategoryDialog(context, categoria),
             child: Container(
               width: 18,
               height: 18,
@@ -390,7 +426,7 @@ Color _obtenerColor(String color) {
     );
   }
 
-  void _showDeleteCategoryDialog(BuildContext context, String categoryName) {
+  void _showDeleteCategoryDialog(BuildContext context, CategoriaModel categoria,) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -402,7 +438,7 @@ Color _obtenerColor(String color) {
             style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
           ),
           content: Text(
-            '¿Estás seguro de que deseas eliminar la categoría "$categoryName"?',
+            '¿Estás seguro de que deseas eliminar la categoría "${categoria.nombre}"?',
             style: const TextStyle(color: AppColors.textSecondary),
           ),
           actions: [
@@ -411,11 +447,14 @@ Color _obtenerColor(String color) {
               child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                await _repository.delete(categoria.id!);
+                if (!mounted) return;
                 Navigator.of(context).pop();
+                await _cargarCategorias();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Categoría "$categoryName" eliminada'),
+                    content: Text('Categoría "${categoria.nombre}" eliminada'),
                     backgroundColor: AppColors.coral,
                     duration: const Duration(seconds: 2),
                   ),
