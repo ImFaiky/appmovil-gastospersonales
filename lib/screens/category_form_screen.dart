@@ -73,6 +73,19 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
       );
       return;
     }
+    bool existe = await _repository.existeNombre(
+      _nameController.text.trim(),
+      excluirId: widget.categoria?.id,
+    );
+
+    if (existe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ya existe una categoría con ese nombre."),
+        ),
+      );
+      return;
+    }
 
     CategoriaModel categoria = CategoriaModel(
       nombre: _nameController.text.trim(),

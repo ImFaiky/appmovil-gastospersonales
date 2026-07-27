@@ -29,4 +29,17 @@ class CategoriaRepository {
         .map((e) => CategoriaModel.fromMap(e))
         .toList();
   }
+
+  Future<bool> existeNombre(String nombre, {int? excluirId}) async {
+  List<CategoriaModel> categorias = await getAll();
+
+  return categorias.any((categoria) {
+    if (excluirId != null && categoria.id == excluirId) {
+      return false;
+    }
+
+    return categoria.nombre.toLowerCase().trim() ==
+        nombre.toLowerCase().trim();
+  });
+}
 }

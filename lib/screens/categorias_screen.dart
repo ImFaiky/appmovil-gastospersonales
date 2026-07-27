@@ -17,90 +17,6 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
   List<CategoriaModel> _categorias = [];
   bool _isLoading = true;
 
-  final List<Map<String, dynamic>> _gastosCategories = [
-    {
-      'name': 'Alimentación',
-      'icon': Icons.shopping_cart_rounded,
-      'iconColor': const Color(0xFF60A5FA),
-      'uses': '4 usos',
-    },
-    {
-      'name': 'Transporte',
-      'icon': Icons.directions_bus_rounded,
-      'iconColor': const Color(0xFFFBBF24),
-      'uses': '3 usos',
-    },
-    {
-      'name': 'Salud',
-      'icon': Icons.medical_services_rounded,
-      'iconColor': const Color(0xFFF87171),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Educación',
-      'icon': Icons.menu_book_rounded,
-      'iconColor': const Color(0xFF22D3EE),
-      'uses': '1 usos',
-    },
-    {
-      'name': 'Entretenimiento',
-      'icon': Icons.movie_creation_rounded,
-      'iconColor': const Color(0xFFC084FC),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Vivienda',
-      'icon': Icons.home_rounded,
-      'iconColor': const Color(0xFFFB923C),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Ropa',
-      'icon': Icons.checkroom_rounded,
-      'iconColor': const Color(0xFF34D399),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Servicios',
-      'icon': Icons.lightbulb_rounded,
-      'iconColor': const Color(0xFFF59E0B),
-      'uses': '3 usos',
-    },
-    {
-      'name': 'Otros',
-      'icon': Icons.inventory_2_rounded,
-      'iconColor': const Color(0xFFA78BFA),
-      'uses': '0 usos',
-    },
-  ];
-
-  final List<Map<String, dynamic>> _ingresosCategories = [
-    {
-      'name': 'Salario',
-      'icon': Icons.work_rounded,
-      'iconColor': const Color(0xFFC084FC),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Freelance',
-      'icon': Icons.laptop_chromebook_rounded,
-      'iconColor': const Color(0xFF60A5FA),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Inversiones',
-      'icon': Icons.trending_up_rounded,
-      'iconColor': const Color(0xFF34D399),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Otros',
-      'icon': Icons.inventory_2_rounded,
-      'iconColor': const Color(0xFFFB923C),
-      'uses': '0 usos',
-    },
-  ];
-
   @override
   void initState(){
     super.initState();
@@ -133,9 +49,9 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Categorías',
-                    style: TextStyle(
+                  Text(
+                    'Categorías (${activeCategories.length})',
+                    style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
@@ -265,7 +181,33 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
               const SizedBox(height: 28),
 
               // Categories 3-column Grid
-              GridView.builder(
+              activeCategories.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 80),
+                    child: Column(
+                      children: const [
+                        Icon(
+                          Icons.category_outlined,
+                          size: 80,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 20),
+                        Text(
+                          "No existen categorías",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          "Presiona el botón + para crear una.",
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+              :GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
