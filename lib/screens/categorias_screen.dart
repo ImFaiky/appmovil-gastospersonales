@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../entities/categoriaModel.dart';
+import '../repositories/categoriaRepository.dart';
 import 'category_form_screen.dart';
 
 class CategoriasScreen extends StatefulWidget {
@@ -10,7 +12,10 @@ class CategoriasScreen extends StatefulWidget {
 }
 
 class _CategoriasScreenState extends State<CategoriasScreen> {
+  final CategoriaRepository _repository = CategoriaRepository();
   bool _isGastosSelected = true; // true = Gastos, false = Ingresos
+  List<CategoriaModel> _categorias = [];
+  bool _isLoading = true;
 
   final List<Map<String, dynamic>> _gastosCategories = [
     {
@@ -97,9 +102,25 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
   ];
 
   @override
+  void initState(){
+    super.initState();
+    _cargarCategorias();
+  }
+
+  Future<void> _cargarCategorias() async{
+    final categorias = await _repository.getAll();
+
+    setState((){
+      _categorias = categorias;
+      _isLoading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    List<Map<String, dynamic>> activeCategories =
-        _isGastosSelected ? _gastosCategories : _ingresosCategories;
+    List<CategoriaModel> activeCategories = _categorias.where((categoria){
+      return categoria.tipo == (_isGastosSelected ? "gasto" : "ingreso");
+    }).toList();
 
     return Scaffold(
       body: SafeArea(
@@ -256,10 +277,10 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                 itemBuilder: (context, index) {
                   final item = activeCategories[index];
                   return _buildCategoryGridItem(
-                    name: item['name'] as String,
-                    icon: item['icon'] as IconData,
-                    iconColor: item['iconColor'] as Color,
-                    uses: item['uses'] as String,
+                    name: item.nombre,
+                    icon: Icons.category,
+                    iconColor: Colors.blue,
+                    uses: '',
                   );
                 },
               ),
