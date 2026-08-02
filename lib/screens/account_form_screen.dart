@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../entities/cuentaModel.dart';
 import '../repositories/cuentaRepository.dart';
@@ -15,7 +16,8 @@ class AccountFormScreen extends StatefulWidget {
 class _AccountFormScreenState extends State<AccountFormScreen> {
   final _cuentaRepository = CuentaRepository();
   final _nameController = TextEditingController();
-  final _balanceController = TextEditingController(text: '0.00');
+  final _balanceController = TextEditingController();
+  final _balanceFocusNode = FocusNode();
 
   IconData _selectedIcon = Icons.account_balance_wallet_rounded;
   Color _selectedColor = AppColors.walletYellow;
@@ -37,6 +39,15 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   @override
   void initState() {
     super.initState();
+    _balanceFocusNode.addListener(() {
+      if (_balanceFocusNode.hasFocus) {
+        _balanceController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _balanceController.text.length,
+        );
+      }
+    });
+
     if (widget.account != null) {
       final acc = widget.account!;
       _nameController.text = acc.nombre;
@@ -112,7 +123,56 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
       return;
     }
 
-    final saldo = double.tryParse(balanceText) ?? 0.0;
+    final nameRegExp = RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$');
+    if (!nameRegExp.hasMatch(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El nombre de la cuenta solo puede contener letras y espacios'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+
+    const double maxSaldo = 999999999.00;
+    double saldo = 0.0;
+    if (balanceText.isNotEmpty) {
+      final balanceRegExp = RegExp(r'^\d+(\.\d{1,2})?$');
+      if (!balanceRegExp.hasMatch(balanceText)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ingresa un saldo válido, solo números positivos con hasta 2 decimales (Ej. 500.00)'),
+            backgroundColor: AppColors.coral,
+          ),
+        );
+        return;
+      }
+
+      saldo = double.tryParse(balanceText) ?? 0.0;
+
+      if (saldo < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Ups! El saldo no puede ser negativo. El mínimo permitido es \$0.00 😉'),
+            backgroundColor: AppColors.coral,
+          ),
+        );
+        return;
+      }
+
+      if (saldo > maxSaldo) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '¡Vaya fortuna! 💸 Ese saldo supera el máximo permitido de \$999,999,999.00. '
+              'Ingresa un valor dentro del límite.',
+            ),
+            backgroundColor: AppColors.coral,
+          ),
+        );
+        return;
+      }
+    }
     final tipo = _getTipoFromIcon(_selectedIcon);
     final colorVal = _selectedColor.toARGB32().toString();
 
@@ -157,12 +217,20 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   void dispose() {
     _nameController.dispose();
     _balanceController.dispose();
+    _balanceFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.account != null;
+    final name = _nameController.text.trim();
+    final balanceText = _balanceController.text.trim();
+
+    final isNameValid = name.isEmpty || RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$').hasMatch(name);
+    final isBalanceValid = balanceText.isEmpty ||
+        (RegExp(r'^\d*\.?\d{0,2}$').hasMatch(balanceText) &&
+            (double.tryParse(balanceText) ?? 0) <= 999999999.00);
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -196,9 +264,11 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
               TextField(
                 controller: _nameController,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Ej. Banco Estado, Billetera Personal...',
+                  errorText: isNameValid ? null : 'El nombre solo acepta letras, no números',
                 ),
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
 
@@ -215,13 +285,21 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
               const SizedBox(height: 10),
               TextField(
                 controller: _balanceController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                focusNode: _balanceFocusNode,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: false),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   prefixText: '\$ ',
-                  prefixStyle: TextStyle(color: AppColors.mint, fontSize: 16, fontWeight: FontWeight.bold),
+                  prefixStyle: const TextStyle(color: AppColors.mint, fontSize: 16, fontWeight: FontWeight.bold),
                   hintText: '0.00',
+                  errorText: isBalanceValid
+                      ? null
+                      : 'Ingresa un monto positivo (0 a 999,999,999.00) con hasta 2 decimales',
                 ),
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
 
@@ -340,10 +418,13 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _saveAccount,
+                  onPressed: (name.isNotEmpty && isNameValid && isBalanceValid)
+                      ? _saveAccount
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.background,
+                    disabledBackgroundColor: AppColors.mint.withAlpha(77),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),

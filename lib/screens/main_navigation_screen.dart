@@ -32,8 +32,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         userId: widget.userId,
         isActive: _selectedIndex == 2,
       ),
-      const CategoriasScreen(),
-      const EstadisticasScreen(),
+      CategoriasScreen(
+        userId: widget.userId,
+        isActive: _selectedIndex == 3,
+      ),
+      EstadisticasScreen(
+        userId: widget.userId,
+        isActive: _selectedIndex == 4,
+      ),
     ];
   }
 

@@ -256,6 +256,20 @@ class _CuentasScreenState extends State<CuentasScreen> {
                               isNegative: cuenta.saldo < 0,
                               progress: progress,
                               progressColor: iconColor,
+                              onEdit: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => AccountFormScreen(
+                                      userId: widget.userId,
+                                      account: cuenta,
+                                    ),
+                                  ),
+                                ).then((value) {
+                                  if (value == true) {
+                                    _loadCuentas();
+                                  }
+                                });
+                              },
                               onDelete: () => _showDeleteAccountDialog(context, cuenta),
                             ),
                           ),
@@ -282,6 +296,7 @@ class _CuentasScreenState extends State<CuentasScreen> {
     required bool isNegative,
     required double progress,
     required Color progressColor,
+    required VoidCallback onEdit,
     required VoidCallback onDelete,
   }) {
     return Container(
@@ -334,16 +349,32 @@ class _CuentasScreenState extends State<CuentasScreen> {
                   ],
                 ),
               ),
-              // Trash Icon
-              IconButton(
-                icon: Icon(
-                  Icons.delete_outline_rounded,
-                  color: AppColors.textSecondary.withAlpha(128),
-                  size: 20,
-                ),
-                onPressed: onDelete,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+              // Grouped Actions
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.edit_outlined,
+                      color: AppColors.textSecondary.withAlpha(128),
+                      size: 20,
+                    ),
+                    onPressed: onEdit,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    icon: Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppColors.textSecondary.withAlpha(128),
+                      size: 20,
+                    ),
+                    onPressed: onDelete,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -380,10 +411,10 @@ class _CuentasScreenState extends State<CuentasScreen> {
     );
   }
 
-  void _showDeleteAccountDialog(BuildContext context, Cuentamodel cuenta) {
+  void _showDeleteAccountDialog(BuildContext parentContext, Cuentamodel cuenta) {
     showDialog(
-      context: context,
-      builder: (BuildContext context) {
+      context: parentContext,
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           backgroundColor: AppColors.cardBg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -397,17 +428,19 @@ class _CuentasScreenState extends State<CuentasScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
             ),
             TextButton(
               onPressed: () async {
+                // Close dialog FIRST before async work
+                Navigator.of(dialogContext).pop();
+                final scaffoldMessenger = ScaffoldMessenger.of(parentContext);
                 try {
                   await _cuentaRepository.delete(cuenta.id!);
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
+                  if (mounted) {
                     _loadCuentas();
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    scaffoldMessenger.showSnackBar(
                       SnackBar(
                         content: Text('Cuenta "${cuenta.nombre}" eliminada'),
                         backgroundColor: AppColors.coral,
@@ -416,9 +449,8 @@ class _CuentasScreenState extends State<CuentasScreen> {
                     );
                   }
                 } catch (e) {
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  if (mounted) {
+                    scaffoldMessenger.showSnackBar(
                       const SnackBar(
                         content: Text('Error al eliminar la cuenta'),
                         backgroundColor: AppColors.coral,

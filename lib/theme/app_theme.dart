@@ -48,7 +48,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.cardBg.withOpacity(0.5),
+        fillColor: AppColors.cardBg.withAlpha(128),
         hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
