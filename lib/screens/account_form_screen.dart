@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../entities/cuentaModel.dart';
 import '../repositories/cuentaRepository.dart';
@@ -228,9 +227,16 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     final balanceText = _balanceController.text.trim();
 
     final isNameValid = name.isEmpty || RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$').hasMatch(name);
-    final isBalanceValid = balanceText.isEmpty ||
-        (RegExp(r'^\d*\.?\d{0,2}$').hasMatch(balanceText) &&
-            (double.tryParse(balanceText) ?? 0) <= 999999999.00);
+
+    String? balanceError;
+    if (balanceText.isNotEmpty) {
+      if (!RegExp(r'^\d*\.?\d{0,2}$').hasMatch(balanceText)) {
+        balanceError = 'El saldo solo acepta números, no letras (Ej. 500.00)';
+      } else if ((double.tryParse(balanceText) ?? 0) > 999999999.00) {
+        balanceError = 'El saldo supera el máximo de 999,999,999.00';
+      }
+    }
+    final isBalanceValid = balanceError == null;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -265,7 +271,9 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                 controller: _nameController,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: 'Ej. Banco Estado, Billetera Personal...',
+                  hintText: 'Ej. Cuenta Banco Estado, Billetera personal',
+                  helperText: 'Nombre con el que reconocerás esta cuenta (solo letras).',
+                  helperMaxLines: 2,
                   errorText: isNameValid ? null : 'El nombre solo acepta letras, no números',
                 ),
                 onChanged: (_) => setState(() {}),
@@ -287,17 +295,14 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                 controller: _balanceController,
                 focusNode: _balanceFocusNode,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: false),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                ],
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 decoration: InputDecoration(
                   prefixText: '\$ ',
                   prefixStyle: const TextStyle(color: AppColors.mint, fontSize: 16, fontWeight: FontWeight.bold),
-                  hintText: '0.00',
-                  errorText: isBalanceValid
-                      ? null
-                      : 'Ingresa un monto positivo (0 a 999,999,999.00) con hasta 2 decimales',
+                  hintText: 'Ej. 1500.50',
+                  helperText: 'Monto disponible actualmente. Puedes usar decimales (Ej. 1500.50).',
+                  helperMaxLines: 2,
+                  errorText: balanceError,
                 ),
                 onChanged: (_) => setState(() {}),
               ),

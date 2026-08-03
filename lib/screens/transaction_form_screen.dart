@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../entities/movimientoModel.dart';
 import '../repositories/movimientoRepository.dart';
@@ -37,6 +36,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   int? _selectedCategoryId;
   bool _isLoading = true;
   String? _conceptError;
+  String? _amountError;
 
   @override
   void initState() {
@@ -267,9 +267,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                             controller: _amountController,
                             focusNode: _amountFocusNode,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}|^\d*')),
-                            ],
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: AppColors.textPrimary,
@@ -286,10 +283,28 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                               fillColor: Colors.transparent,
                               filled: false,
                             ),
+                            onChanged: (value) {
+                              setState(() {
+                                if (value.isNotEmpty &&
+                                    !RegExp(r'^\d+(\.\d{0,2})?$').hasMatch(value)) {
+                                  _amountError = 'El monto solo acepta números, no letras';
+                                } else {
+                                  _amountError = null;
+                                }
+                              });
+                            },
                           ),
                         ),
                       ],
                     ),
+                    if (_amountError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _amountError!,
+                        style: const TextStyle(color: AppColors.coral, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -385,7 +400,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 controller: _conceptController,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: 'Ej. Supermercado, Salario...',
+                  hintText: 'Ej. Compra en el supermercado, Pago de salario',
+                  helperText: 'Describe brevemente para qué fue el movimiento (solo letras).',
+                  helperMaxLines: 2,
                   errorText: _conceptError,
                 ),
                 onChanged: (value) {

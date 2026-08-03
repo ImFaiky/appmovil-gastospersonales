@@ -1129,7 +1129,6 @@ class _LoginScreenState extends State<LoginScreen> {
             letterSpacing: 8,
           ),
           inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(8),
           ],
           onChanged: (_) => setState(() {}),
@@ -1141,6 +1140,9 @@ class _LoginScreenState extends State<LoginScreen> {
               color: AppColors.textSecondary,
               fontSize: 12,
             ),
+            errorText: RegExp(r'^\d*$').hasMatch(_pinController.text)
+                ? null
+                : 'El PIN solo acepta números, no letras',
             suffixIcon: IconButton(
               icon: Icon(
                 _obscurePin
@@ -1231,7 +1233,7 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(
           height: 56,
           child: ElevatedButton(
-            onPressed: len >= 6
+            onPressed: (len >= 6 && RegExp(r'^\d+$').hasMatch(_pinController.text))
                 ? () => setState(() => _state = LoginState.onboardingConfirmPin)
                 : null,
             style: ElevatedButton.styleFrom(
@@ -1348,13 +1350,15 @@ class _LoginScreenState extends State<LoginScreen> {
             letterSpacing: 8,
           ),
           inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(8),
           ],
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: '••••••',
             hintStyle: const TextStyle(letterSpacing: 8, fontSize: 20),
+            errorText: RegExp(r'^\d*$').hasMatch(_confirmPinController.text)
+                ? null
+                : 'El PIN solo acepta números, no letras',
             suffixIcon: IconButton(
               icon: Icon(
                 _obscureConfirmPin

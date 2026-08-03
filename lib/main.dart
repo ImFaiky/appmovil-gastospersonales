@@ -14,6 +14,22 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
         PointerDeviceKind.mouse,
         PointerDeviceKind.trackpad,
       };
+
+  // Elimina el efecto de brillo/estiramiento (overscroll) al deslizar
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+
+  // Suaviza el rebote en los bordes
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
 }
 
 class GastoSmartApp extends StatelessWidget {

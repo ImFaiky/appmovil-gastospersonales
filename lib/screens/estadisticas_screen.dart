@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 import '../theme/app_colors.dart';
+import '../utils/icon_helper.dart';
 import '../repositories/movimientoRepository.dart';
 import '../repositories/categoriaRepository.dart';
 
@@ -266,44 +267,17 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> with SingleTick
   }
 
   IconData _getCategoryIcon(String iconName) {
-    final codePoint = int.tryParse(iconName);
-    if (codePoint != null) {
-      return IconData(codePoint, fontFamily: 'MaterialIcons');
-    }
-    switch (iconName) {
-      case 'shopping_cart_rounded':
-        return Icons.shopping_cart_rounded;
-      case 'directions_bus_rounded':
-        return Icons.directions_bus_rounded;
-      case 'medical_services_rounded':
-        return Icons.medical_services_rounded;
-      case 'menu_book_rounded':
-        return Icons.menu_book_rounded;
-      case 'movie_creation_rounded':
-        return Icons.movie_creation_rounded;
-      case 'home_rounded':
-        return Icons.home_rounded;
-      case 'checkroom_rounded':
-        return Icons.checkroom_rounded;
-      case 'lightbulb_rounded':
-        return Icons.lightbulb_rounded;
-      case 'inventory_2_rounded':
-        return Icons.inventory_2_rounded;
-      case 'work_rounded':
-        return Icons.work_rounded;
-      case 'laptop_chromebook_rounded':
-        return Icons.laptop_chromebook_rounded;
-      case 'trending_up_rounded':
-        return Icons.trending_up_rounded;
-      default:
-        return Icons.category_rounded;
-    }
+    return IconHelper.resolve(iconName, fallback: Icons.category_rounded);
   }
 
   String _formatMoney(double amount) {
     final isNegative = amount < 0;
     final absAmount = amount.abs();
-    final parts = absAmount.toStringAsFixed(0).split('');
+    final fixed = absAmount.toStringAsFixed(2);
+    final dotIndex = fixed.indexOf('.');
+    final intPart = fixed.substring(0, dotIndex);
+    final decPart = fixed.substring(dotIndex);
+    final parts = intPart.split('');
     final buffer = StringBuffer();
     for (int i = 0; i < parts.length; i++) {
       if (i > 0 && (parts.length - i) % 3 == 0) {
@@ -311,7 +285,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> with SingleTick
       }
       buffer.write(parts[i]);
     }
-    return '${isNegative ? '-' : ''}\$${buffer.toString()}';
+    return '${isNegative ? '-' : ''}\$$buffer$decPart';
   }
 
   String _formatAxisLabel(double value) {

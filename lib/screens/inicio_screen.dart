@@ -103,8 +103,12 @@ class _InicioScreenState extends State<InicioScreen> {
   String _formatMoney(double amount) {
     final isNegative = amount < 0;
     final absAmount = amount.abs();
-    // Formatear con separadores de miles
-    final parts = absAmount.toStringAsFixed(0).split('');
+    // Formatear con separadores de miles y 2 decimales
+    final fixed = absAmount.toStringAsFixed(2);
+    final dotIndex = fixed.indexOf('.');
+    final intPart = fixed.substring(0, dotIndex);
+    final decPart = fixed.substring(dotIndex);
+    final parts = intPart.split('');
     final buffer = StringBuffer();
     for (int i = 0; i < parts.length; i++) {
       if (i > 0 && (parts.length - i) % 3 == 0) {
@@ -112,7 +116,7 @@ class _InicioScreenState extends State<InicioScreen> {
       }
       buffer.write(parts[i]);
     }
-    return '${isNegative ? '-' : ''}\$${buffer.toString()}';
+    return '${isNegative ? '-' : ''}\$$buffer$decPart';
   }
 
   // Obtener icono según el tipo de cuenta

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../utils/icon_helper.dart';
 import '../entities/categoriaModel.dart';
 import '../repositories/categoriaRepository.dart';
 
@@ -55,7 +56,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
       _isGasto = cat.tipo == 'gasto';
       try {
         final codePoint = int.parse(cat.icono);
-        _selectedIcon = IconData(codePoint, fontFamily: 'MaterialIcons');
+        _selectedIcon = IconHelper.resolve(codePoint.toString());
       } catch (_) {}
       try {
         _selectedColor = Color(int.parse(cat.color));
@@ -170,7 +171,9 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                   });
                 },
                 decoration: InputDecoration(
-                  hintText: 'Ej. Gimnasio, Mascotas, Regalos...',
+                  hintText: 'Ej. Gimnasio, Mascotas, Regalos',
+                  helperText: 'Nombre de la categoría para agrupar tus movimientos (solo letras).',
+                  helperMaxLines: 2,
                   errorText: _nameError,
                 ),
               ),

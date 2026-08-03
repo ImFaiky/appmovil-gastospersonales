@@ -29,6 +29,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
   final _newNameController = TextEditingController();
   final _newPinController = TextEditingController();
   bool _newObscurePin = true;
+  String? _newPinError;
+  String? _pinError;
 
   UsuarioModel? _currentUser;
   List<UsuarioModel> _allUsers = [];
@@ -570,6 +572,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     _newNameController.clear();
     _newPinController.clear();
     _newObscurePin = true;
+    _newPinError = null;
 
     showDialog(
       context: context,
@@ -603,13 +606,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: AppColors.textPrimary),
                       inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(8),
                       ],
+                      onChanged: (value) {
+                        setDialogState(() {
+                          if (value.isNotEmpty && !RegExp(r'^\d+$').hasMatch(value)) {
+                            _newPinError = 'El PIN solo acepta números, no letras';
+                          } else {
+                            _newPinError = null;
+                          }
+                        });
+                      },
                       decoration: InputDecoration(
                         labelText: 'PIN de Seguridad',
                         labelStyle: const TextStyle(color: AppColors.textSecondary),
                         hintText: 'Debe tener entre 6 y 8 dígitos',
+                        errorText: _newPinError,
                         suffixIcon: IconButton(
                           icon: Icon(
                             _newObscurePin ? Icons.visibility_off_rounded : Icons.visibility_rounded,
@@ -720,13 +732,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
                             keyboardType: TextInputType.number,
                             style: const TextStyle(color: AppColors.textPrimary),
                             inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
                               LengthLimitingTextInputFormatter(8),
                             ],
+                            onChanged: (value) {
+                              setState(() {
+                                if (value.isNotEmpty && !RegExp(r'^\d+$').hasMatch(value)) {
+                                  _pinError = 'El PIN solo acepta números, no letras';
+                                } else {
+                                  _pinError = null;
+                                }
+                              });
+                            },
                             decoration: InputDecoration(
                               labelText: 'PIN de Seguridad',
                               labelStyle: const TextStyle(color: AppColors.textSecondary),
                               helperText: 'Debe contener entre 6 y 8 números',
+                              errorText: _pinError,
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePin ? Icons.visibility_off_rounded : Icons.visibility_rounded,

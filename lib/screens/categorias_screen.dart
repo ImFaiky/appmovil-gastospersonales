@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../utils/icon_helper.dart';
 import 'category_form_screen.dart';
 import '../entities/categoriaModel.dart';
 import '../repositories/categoriaRepository.dart';
@@ -89,38 +90,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
   }
 
   IconData _getIconData(String iconName) {
-    final codePoint = int.tryParse(iconName);
-    if (codePoint != null) {
-      return IconData(codePoint, fontFamily: 'MaterialIcons');
-    }
-    switch (iconName) {
-      case 'shopping_cart_rounded':
-        return Icons.shopping_cart_rounded;
-      case 'directions_bus_rounded':
-        return Icons.directions_bus_rounded;
-      case 'medical_services_rounded':
-        return Icons.medical_services_rounded;
-      case 'menu_book_rounded':
-        return Icons.menu_book_rounded;
-      case 'movie_creation_rounded':
-        return Icons.movie_creation_rounded;
-      case 'home_rounded':
-        return Icons.home_rounded;
-      case 'checkroom_rounded':
-        return Icons.checkroom_rounded;
-      case 'lightbulb_rounded':
-        return Icons.lightbulb_rounded;
-      case 'inventory_2_rounded':
-        return Icons.inventory_2_rounded;
-      case 'work_rounded':
-        return Icons.work_rounded;
-      case 'laptop_chromebook_rounded':
-        return Icons.laptop_chromebook_rounded;
-      case 'trending_up_rounded':
-        return Icons.trending_up_rounded;
-      default:
-        return Icons.help_outline_rounded;
-    }
+    return IconHelper.resolve(iconName);
   }
 
   Color _getColor(String colorStr) {
