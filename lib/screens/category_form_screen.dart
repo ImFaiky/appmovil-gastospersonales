@@ -14,6 +14,18 @@ class CategoryFormScreen extends StatefulWidget {
 
 class _CategoryFormScreenState extends State<CategoryFormScreen> {
   final _nameController = TextEditingController();
+
+  @override
+  void initState(){
+    super.initState();
+    if(widget.categoria != null){
+      _nameController.text = widget.categoria!.nombre;
+      _isGasto = widget.categoria!.tipo == "gasto";
+      _selectedIcon = IconData(int.parse(widget.categoria!.icono), fontFamily: 'MaterialIcons');
+      _selectedColor = Color(int.parse(widget.categoria!.color));
+    }
+  }
+
   final CategoriaRepository _repository = CategoriaRepository();
   String? _nameError;
   bool _isGasto = true;
@@ -77,6 +89,19 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
         const SnackBar(
           content: Text("Ingrese el nombre de la categoría"),
           backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+    bool existe = await _repository.existeNombre(
+      _nameController.text.trim(),
+      excluirId: widget.categoria?.id,
+    );
+
+    if (existe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ya existe una categoría con ese nombre."),
         ),
       );
       return;

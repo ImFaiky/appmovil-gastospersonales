@@ -18,6 +18,7 @@ class CategoriasScreen extends StatefulWidget {
 }
 
 class _CategoriasScreenState extends State<CategoriasScreen> {
+  final CategoriaRepository _repository = CategoriaRepository();
   bool _isGastosSelected = true; // true = Gastos, false = Ingresos
   bool _isLoading = true;
 
@@ -298,6 +299,17 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     );
   }
 
+  IconData _obtenerIcono(String icono) {
+  return IconData(
+    int.parse(icono),
+    fontFamily: 'MaterialIcons',
+  );
+}
+
+Color _obtenerColor(String color) {
+  return Color(int.parse(color));
+}
+
   Widget _buildCategoryGridItem({
     required CategoriaModel category,
     required String uses,
@@ -373,6 +385,42 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
         ),
 
         // Top Right Delete Circular Cross Badge
+        Positioned(
+          top: 8,
+          left: 8,
+          child: GestureDetector(
+            onTap: () async {
+
+              bool? actualizado = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CategoryFormScreen(
+                    categoria: categoria,
+                  ),
+                ),
+              );
+
+              if (actualizado == true) {
+                _cargarCategorias();
+              }
+            },
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: AppColors.background.withOpacity(0.8),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.edit,
+                size: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+
         Positioned(
           top: 8,
           right: 8,
