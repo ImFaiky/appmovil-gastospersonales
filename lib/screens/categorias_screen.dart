@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../entities/categoriaModel.dart';
+import '../repositories/categoriaRepository.dart';
 import 'category_form_screen.dart';
 
 class CategoriasScreen extends StatefulWidget {
@@ -10,96 +12,31 @@ class CategoriasScreen extends StatefulWidget {
 }
 
 class _CategoriasScreenState extends State<CategoriasScreen> {
+  final CategoriaRepository _repository = CategoriaRepository();
   bool _isGastosSelected = true; // true = Gastos, false = Ingresos
+  List<CategoriaModel> _categorias = [];
+  bool _isLoading = true;
 
-  final List<Map<String, dynamic>> _gastosCategories = [
-    {
-      'name': 'Alimentación',
-      'icon': Icons.shopping_cart_rounded,
-      'iconColor': const Color(0xFF60A5FA),
-      'uses': '4 usos',
-    },
-    {
-      'name': 'Transporte',
-      'icon': Icons.directions_bus_rounded,
-      'iconColor': const Color(0xFFFBBF24),
-      'uses': '3 usos',
-    },
-    {
-      'name': 'Salud',
-      'icon': Icons.medical_services_rounded,
-      'iconColor': const Color(0xFFF87171),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Educación',
-      'icon': Icons.menu_book_rounded,
-      'iconColor': const Color(0xFF22D3EE),
-      'uses': '1 usos',
-    },
-    {
-      'name': 'Entretenimiento',
-      'icon': Icons.movie_creation_rounded,
-      'iconColor': const Color(0xFFC084FC),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Vivienda',
-      'icon': Icons.home_rounded,
-      'iconColor': const Color(0xFFFB923C),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Ropa',
-      'icon': Icons.checkroom_rounded,
-      'iconColor': const Color(0xFF34D399),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Servicios',
-      'icon': Icons.lightbulb_rounded,
-      'iconColor': const Color(0xFFF59E0B),
-      'uses': '3 usos',
-    },
-    {
-      'name': 'Otros',
-      'icon': Icons.inventory_2_rounded,
-      'iconColor': const Color(0xFFA78BFA),
-      'uses': '0 usos',
-    },
-  ];
+  @override
+  void initState(){
+    super.initState();
+    _cargarCategorias();
+  }
 
-  final List<Map<String, dynamic>> _ingresosCategories = [
-    {
-      'name': 'Salario',
-      'icon': Icons.work_rounded,
-      'iconColor': const Color(0xFFC084FC),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Freelance',
-      'icon': Icons.laptop_chromebook_rounded,
-      'iconColor': const Color(0xFF60A5FA),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Inversiones',
-      'icon': Icons.trending_up_rounded,
-      'iconColor': const Color(0xFF34D399),
-      'uses': '2 usos',
-    },
-    {
-      'name': 'Otros',
-      'icon': Icons.inventory_2_rounded,
-      'iconColor': const Color(0xFFFB923C),
-      'uses': '0 usos',
-    },
-  ];
+  Future<void> _cargarCategorias() async{
+    final categorias = await _repository.getAll();
+
+    setState((){
+      _categorias = categorias;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    List<Map<String, dynamic>> activeCategories =
-        _isGastosSelected ? _gastosCategories : _ingresosCategories;
+    List<CategoriaModel> activeCategories = _categorias.where((categoria){
+      return categoria.tipo == (_isGastosSelected ? "gasto" : "ingreso");
+    }).toList();
 
     return Scaffold(
       body: SafeArea(
@@ -112,9 +49,9 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Categorías',
-                    style: TextStyle(
+                  Text(
+                    'Categorías (${activeCategories.length})',
+                    style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
@@ -130,12 +67,13 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.add, color: AppColors.background, size: 22),
-                      onPressed: () {
-                        Navigator.of(context).push(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (context) => const CategoryFormScreen(),
                           ),
                         );
+                        _cargarCategorias();
                       },
                     ),
                   ),
@@ -243,7 +181,33 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
               const SizedBox(height: 28),
 
               // Categories 3-column Grid
-              GridView.builder(
+              activeCategories.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 80),
+                    child: Column(
+                      children: const [
+                        Icon(
+                          Icons.category_outlined,
+                          size: 80,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 20),
+                        Text(
+                          "No existen categorías",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          "Presiona el botón + para crear una.",
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+              :GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -256,10 +220,10 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                 itemBuilder: (context, index) {
                   final item = activeCategories[index];
                   return _buildCategoryGridItem(
-                    name: item['name'] as String,
-                    icon: item['icon'] as IconData,
-                    iconColor: item['iconColor'] as Color,
-                    uses: item['uses'] as String,
+                    categoria: item,
+                    icon: _obtenerIcono(item.icono),
+                    iconColor: _obtenerColor(item.color),
+                    uses: '',
                   );
                 },
               ),
@@ -270,8 +234,19 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     );
   }
 
+  IconData _obtenerIcono(String icono) {
+  return IconData(
+    int.parse(icono),
+    fontFamily: 'MaterialIcons',
+  );
+}
+
+Color _obtenerColor(String color) {
+  return Color(int.parse(color));
+}
+
   Widget _buildCategoryGridItem({
-    required String name,
+    required CategoriaModel categoria,
     required IconData icon,
     required Color iconColor,
     required String uses,
@@ -306,7 +281,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
               const SizedBox(height: 12),
               // Category Name
               Text(
-                name,
+                categoria.nombre,
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -332,9 +307,45 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
         // Top Right Delete Circular Cross Badge
         Positioned(
           top: 8,
+          left: 8,
+          child: GestureDetector(
+            onTap: () async {
+
+              bool? actualizado = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CategoryFormScreen(
+                    categoria: categoria,
+                  ),
+                ),
+              );
+
+              if (actualizado == true) {
+                _cargarCategorias();
+              }
+            },
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: AppColors.background.withOpacity(0.8),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.edit,
+                size: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+
+        Positioned(
+          top: 8,
           right: 8,
           child: GestureDetector(
-            onTap: () => _showDeleteCategoryDialog(context, name),
+            onTap: () => _showDeleteCategoryDialog(context, categoria),
             child: Container(
               width: 18,
               height: 18,
@@ -357,7 +368,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     );
   }
 
-  void _showDeleteCategoryDialog(BuildContext context, String categoryName) {
+  void _showDeleteCategoryDialog(BuildContext context, CategoriaModel categoria,) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -369,7 +380,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
             style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
           ),
           content: Text(
-            '¿Estás seguro de que deseas eliminar la categoría "$categoryName"?',
+            '¿Estás seguro de que deseas eliminar la categoría "${categoria.nombre}"?',
             style: const TextStyle(color: AppColors.textSecondary),
           ),
           actions: [
@@ -378,11 +389,14 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
               child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                await _repository.delete(categoria.id!);
+                if (!mounted) return;
                 Navigator.of(context).pop();
+                await _cargarCategorias();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Categoría "$categoryName" eliminada'),
+                    content: Text('Categoría "${categoria.nombre}" eliminada'),
                     backgroundColor: AppColors.coral,
                     duration: const Duration(seconds: 2),
                   ),

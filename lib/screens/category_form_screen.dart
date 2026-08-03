@@ -4,7 +4,8 @@ import '../entities/categoriaModel.dart';
 import '../repositories/categoriaRepository.dart';
 
 class CategoryFormScreen extends StatefulWidget {
-  const CategoryFormScreen({super.key});
+  final CategoriaModel? categoria;
+  const CategoryFormScreen({super.key, this.categoria,});
 
   @override
   State<CategoryFormScreen> createState() => _CategoryFormScreenState();
@@ -12,6 +13,18 @@ class CategoryFormScreen extends StatefulWidget {
 
 class _CategoryFormScreenState extends State<CategoryFormScreen> {
   final _nameController = TextEditingController();
+
+  @override
+  void initState(){
+    super.initState();
+    if(widget.categoria != null){
+      _nameController.text = widget.categoria!.nombre;
+      _isGasto = widget.categoria!.tipo == "gasto";
+      _selectedIcon = IconData(int.parse(widget.categoria!.icono), fontFamily: 'MaterialIcons');
+      _selectedColor = Color(int.parse(widget.categoria!.color));
+    }
+  }
+
   final CategoriaRepository _repository = CategoriaRepository();
   bool _isGasto = true;
 
@@ -60,6 +73,19 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
       );
       return;
     }
+    bool existe = await _repository.existeNombre(
+      _nameController.text.trim(),
+      excluirId: widget.categoria?.id,
+    );
+
+    if (existe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ya existe una categoría con ese nombre."),
+        ),
+      );
+      return;
+    }
 
     CategoriaModel categoria = CategoriaModel(
       nombre: _nameController.text.trim(),
@@ -68,7 +94,17 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
       color: _selectedColor.value.toString(),
     );
 
-    await _repository.insert(categoria);
+    if (widget.categoria == null) {
+
+      await _repository.insert(categoria);
+
+    } else {
+
+      categoria.id = widget.categoria!.id;
+
+      await _repository.update(categoria);
+
+    }
 
     if (!mounted) return;
 
@@ -79,8 +115,10 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Nueva categoría',
+        title: Text(
+          widget.categoria == null
+          ? 'Nueva Categoria'
+          : 'Editar Categoria',
           style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.transparent,
@@ -311,9 +349,11 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Guardar categoría',
-                    style: TextStyle(
+                  child: Text(
+                    widget.categoria == null
+                    ? 'Guardar categoría'
+                    : 'Actualizar Categoria',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
