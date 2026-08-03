@@ -2,19 +2,309 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 import '../theme/app_colors.dart';
+import '../utils/icon_helper.dart';
+import '../repositories/movimientoRepository.dart';
+import '../repositories/categoriaRepository.dart';
 
 class EstadisticasScreen extends StatefulWidget {
-  const EstadisticasScreen({super.key});
+  final int userId;
+  final bool isActive;
+  const EstadisticasScreen({super.key, required this.userId, this.isActive = false});
 
   @override
   State<EstadisticasScreen> createState() => _EstadisticasScreenState();
 }
 
-class _EstadisticasScreenState extends State<EstadisticasScreen> {
+class _EstadisticasScreenState extends State<EstadisticasScreen> with SingleTickerProviderStateMixin {
   String _activeTab = 'Mensual'; // 'Mensual', 'Categorías', 'Tendencia'
+  DateTime? _fechaInicio;
+  DateTime? _fechaFin;
+
+  // Database repositories
+  final _movimientoRepository = MovimientoRepository();
+  final _categoriaRepository = CategoriaRepository();
+
+  // Animation controller
+  late AnimationController _animationController;
+
+  // Data states
+  bool _isLoading = true;
+  double _totalIngresos = 0.0;
+  double _totalGastos = 0.0;
+  double _totalAhorro = 0.0;
+
+  // Last 6 months labels and totals
+  List<String> _monthLabels = [];
+  double _maxMonthVal = 1.0;
+
+  // Tab 1 & Tab 3 Ratios
+  List<double> _incomeRatios = [];
+  List<double> _expenseRatios = [];
+  List<double> _savingsRatios = [];
+
+  // Tab 2 (Categorias breakdown)
+  List<Map<String, dynamic>> _expenseCategoryDataList = [];
+  List<DoughnutSection> _expenseDoughnutSections = [];
+  List<Map<String, dynamic>> _incomeCategoryDataList = [];
+  List<DoughnutSection> _incomeDoughnutSections = [];
+  bool _isGastoFilter = true; // true = Gastos/Egresos, false = Ingresos
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _loadStats();
+  }
+
+  @override
+  void didUpdateWidget(covariant EstadisticasScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadStats();
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadStats() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      var movimientos = await _movimientoRepository.getAllForUser(widget.userId);
+
+      // Filter by Date Range if selected
+      if (_fechaInicio != null && _fechaFin != null) {
+        final start = DateTime(_fechaInicio!.year, _fechaInicio!.month, _fechaInicio!.day);
+        final end = DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day, 23, 59, 59);
+        movimientos = movimientos.where((mov) {
+          final txDate = DateTime(mov.fecha.year, mov.fecha.month, mov.fecha.day);
+          return (txDate.isAfter(start) || txDate.isAtSameMomentAs(start)) &&
+                 (txDate.isBefore(end) || txDate.isAtSameMomentAs(end));
+        }).toList();
+      }
+
+      final categorias = await _categoriaRepository.getAll();
+      final categoriasMap = {for (var cat in categorias) cat.id!: cat};
+
+      // 1. Calculate top totals (KPI cards)
+      double totalIngresos = 0.0;
+      double totalGastos = 0.0;
+      for (var mov in movimientos) {
+        if (mov.tipo == 'ingreso') {
+          totalIngresos += mov.monto;
+        } else {
+          totalGastos += mov.monto;
+        }
+      }
+      double totalAhorro = totalIngresos - totalGastos;
+
+      // 2. Generate last 6 months dynamically
+      final now = DateTime.now();
+      final List<DateTime> months = List.generate(6, (i) {
+        return DateTime(now.year, now.month - (5 - i), 1);
+      });
+
+      final mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      final List<String> monthLabels = [];
+      final Map<String, double> monthlyIngresos = {};
+      final Map<String, double> monthlyGastos = {};
+
+      for (var m in months) {
+        final label = mesesNombres[m.month - 1];
+        monthLabels.add(label);
+        monthlyIngresos[label] = 0.0;
+        monthlyGastos[label] = 0.0;
+      }
+
+      for (var mov in movimientos) {
+        final date = mov.fecha;
+        for (var m in months) {
+          if (date.year == m.year && date.month == m.month) {
+            final label = mesesNombres[m.month - 1];
+            if (mov.tipo == 'ingreso') {
+              monthlyIngresos[label] = (monthlyIngresos[label] ?? 0.0) + mov.monto;
+            } else {
+              monthlyGastos[label] = (monthlyGastos[label] ?? 0.0) + mov.monto;
+            }
+            break;
+          }
+        }
+      }
+
+      // Find max monthly value to scale graphs correctly
+      double maxMonthVal = 1.0;
+      for (var label in monthLabels) {
+        final inc = monthlyIngresos[label] ?? 0.0;
+        final exp = monthlyGastos[label] ?? 0.0;
+        if (inc > maxMonthVal) maxMonthVal = inc;
+        if (exp > maxMonthVal) maxMonthVal = exp;
+      }
+
+      // Generate ratio lists for Tab 1 and Tab 3
+      final List<double> incomeRatios = [];
+      final List<double> expenseRatios = [];
+      final List<double> savingsRatios = [];
+
+      for (var label in monthLabels) {
+        final inc = monthlyIngresos[label] ?? 0.0;
+        final exp = monthlyGastos[label] ?? 0.0;
+        final sav = inc - exp;
+        incomeRatios.add(inc / maxMonthVal);
+        expenseRatios.add(exp / maxMonthVal);
+        savingsRatios.add((sav / maxMonthVal).clamp(0.0, 1.0));
+      }
+
+      // 3. Group expenses and incomes by category
+      final Map<int, double> expensesByCategory = {};
+      double totalExpenses = 0.0;
+      final Map<int, double> incomesByCategory = {};
+      double totalIncomes = 0.0;
+
+      for (var mov in movimientos) {
+        if (mov.tipo == 'gasto') {
+          expensesByCategory[mov.categoriaId] = (expensesByCategory[mov.categoriaId] ?? 0.0) + mov.monto;
+          totalExpenses += mov.monto;
+        } else if (mov.tipo == 'ingreso') {
+          incomesByCategory[mov.categoriaId] = (incomesByCategory[mov.categoriaId] ?? 0.0) + mov.monto;
+          totalIncomes += mov.monto;
+        }
+      }
+
+      // Process expenses
+      final List<Map<String, dynamic>> expenseCategoryDataList = [];
+      expensesByCategory.forEach((catId, total) {
+        final cat = categoriasMap[catId];
+        if (cat != null) {
+          expenseCategoryDataList.add({
+            'id': catId,
+            'nombre': cat.nombre,
+            'icono': cat.icono,
+            'color': cat.color,
+            'total': total,
+            'percentage': totalExpenses > 0 ? total / totalExpenses : 0.0,
+          });
+        }
+      });
+      expenseCategoryDataList.sort((a, b) => b['total'].compareTo(a['total']));
+
+      final List<DoughnutSection> expenseDoughnutSections = expenseCategoryDataList.map((c) {
+        return DoughnutSection(
+          percentage: c['percentage'] as double,
+          color: _parseCategoryColor(c['color'] as String),
+        );
+      }).toList();
+
+      // Process incomes
+      final List<Map<String, dynamic>> incomeCategoryDataList = [];
+      incomesByCategory.forEach((catId, total) {
+        final cat = categoriasMap[catId];
+        if (cat != null) {
+          incomeCategoryDataList.add({
+            'id': catId,
+            'nombre': cat.nombre,
+            'icono': cat.icono,
+            'color': cat.color,
+            'total': total,
+            'percentage': totalIncomes > 0 ? total / totalIncomes : 0.0,
+          });
+        }
+      });
+      incomeCategoryDataList.sort((a, b) => b['total'].compareTo(a['total']));
+
+      final List<DoughnutSection> incomeDoughnutSections = incomeCategoryDataList.map((c) {
+        return DoughnutSection(
+          percentage: c['percentage'] as double,
+          color: _parseCategoryColor(c['color'] as String),
+        );
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _totalIngresos = totalIngresos;
+        _totalGastos = totalGastos;
+        _totalAhorro = totalAhorro;
+        _monthLabels = monthLabels;
+        _maxMonthVal = maxMonthVal;
+        _incomeRatios = incomeRatios;
+        _expenseRatios = expenseRatios;
+        _savingsRatios = savingsRatios;
+        _expenseCategoryDataList = expenseCategoryDataList;
+        _expenseDoughnutSections = expenseDoughnutSections;
+        _incomeCategoryDataList = incomeCategoryDataList;
+        _incomeDoughnutSections = incomeDoughnutSections;
+        _isLoading = false;
+      });
+
+      // Start entering animations
+      _animationController.forward(from: 0.0);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Color _parseCategoryColor(String colorStr) {
+    try {
+      if (colorStr.startsWith('0x') || colorStr.startsWith('0X')) {
+        return Color(int.parse(colorStr));
+      }
+      return Color(int.parse(colorStr));
+    } catch (_) {
+      return AppColors.mint;
+    }
+  }
+
+  IconData _getCategoryIcon(String iconName) {
+    return IconHelper.resolve(iconName, fallback: Icons.category_rounded);
+  }
+
+  String _formatMoney(double amount) {
+    final isNegative = amount < 0;
+    final absAmount = amount.abs();
+    final fixed = absAmount.toStringAsFixed(2);
+    final dotIndex = fixed.indexOf('.');
+    final intPart = fixed.substring(0, dotIndex);
+    final decPart = fixed.substring(dotIndex);
+    final parts = intPart.split('');
+    final buffer = StringBuffer();
+    for (int i = 0; i < parts.length; i++) {
+      if (i > 0 && (parts.length - i) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(parts[i]);
+    }
+    return '${isNegative ? '-' : ''}\$$buffer$decPart';
+  }
+
+  String _formatAxisLabel(double value) {
+    if (value >= 1000) {
+      return '\$${(value / 1000).toStringAsFixed(1)}k';
+    }
+    return '\$${value.toStringAsFixed(0)}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.mint),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -39,7 +329,37 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                   fontSize: 14,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // Date Range Picker Row
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateRangePicker(),
+                  ),
+                  if (_fechaInicio != null || _fechaFin != null) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.clear_rounded, color: AppColors.coral, size: 18),
+                        onPressed: () {
+                          setState(() {
+                            _fechaInicio = null;
+                            _fechaFin = null;
+                          });
+                          _loadStats();
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 20),
 
               // KPI Row: Ingresos, Gastos, Ahorro
               Row(
@@ -47,7 +367,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                   Expanded(
                     child: _buildKpiCard(
                       label: 'Ingresos',
-                      value: '\$23,700',
+                      value: _formatMoney(_totalIngresos),
                       valueColor: AppColors.mint,
                     ),
                   ),
@@ -55,7 +375,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                   Expanded(
                     child: _buildKpiCard(
                       label: 'Gastos',
-                      value: '\$13,199',
+                      value: _formatMoney(_totalGastos),
                       valueColor: AppColors.coral,
                     ),
                   ),
@@ -63,7 +383,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                   Expanded(
                     child: _buildKpiCard(
                       label: 'Ahorro',
-                      value: '\$10,501',
+                      value: _formatMoney(_totalAhorro),
                       valueColor: AppColors.bankBlue,
                     ),
                   ),
@@ -133,6 +453,71 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
     );
   }
 
+  Widget _buildDateRangePicker() {
+    final startText = _fechaInicio != null ? '${_fechaInicio!.day}/${_fechaInicio!.month}/${_fechaInicio!.year}' : 'Inicio';
+    final endText = _fechaFin != null ? '${_fechaFin!.day}/${_fechaFin!.month}/${_fechaFin!.year}' : 'Fin';
+    final hasRange = _fechaInicio != null && _fechaFin != null;
+
+    return InkWell(
+      onTap: () async {
+        final picked = await showDateRangePicker(
+          context: context,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+          initialDateRange: hasRange
+              ? DateTimeRange(start: _fechaInicio!, end: _fechaFin!)
+              : null,
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: const ColorScheme.dark(
+                  primary: AppColors.mint,
+                  onPrimary: AppColors.background,
+                  surface: AppColors.cardBg,
+                  onSurface: AppColors.textPrimary,
+                ),
+              ),
+              child: child!,
+            );
+          },
+        );
+        if (picked != null) {
+          setState(() {
+            _fechaInicio = picked.start;
+            _fechaFin = picked.end;
+          });
+          _loadStats();
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+          color: AppColors.cardBg,
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today_rounded, color: AppColors.mint, size: 16),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                hasRange ? '$startText - $endText' : 'Filtrar por rango de fechas',
+                style: TextStyle(
+                  color: hasRange ? AppColors.textPrimary : AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: hasRange ? FontWeight.bold : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTabButton(String tabName) {
     bool isActive = _activeTab == tabName;
     return Expanded(
@@ -141,6 +526,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
           setState(() {
             _activeTab = tabName;
           });
+          _animationController.forward(from: 0.0);
         },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -178,6 +564,15 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
 
   // --- TAB 1: MENSUAL ---
   Widget _buildMensualView() {
+    final yMax = _maxMonthVal;
+    final yLabels = [
+      _formatAxisLabel(yMax),
+      _formatAxisLabel(yMax * 0.75),
+      _formatAxisLabel(yMax * 0.5),
+      _formatAxisLabel(yMax * 0.25),
+      '\$0',
+    ];
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -206,13 +601,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                 Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: const [
-                    Text('\$24k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$18k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$12k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$6k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$0k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                  ],
+                  children: yLabels.map((lbl) => Text(lbl, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10))).toList(),
                 ),
                 const SizedBox(width: 14),
                 // Chart Bars Area
@@ -230,17 +619,21 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                         }),
                       ),
                       // Bars Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _buildMonthDoubleBar('Feb', 0, 0),
-                          _buildMonthDoubleBar('Mar', 0, 0),
-                          _buildMonthDoubleBar('Abr', 0, 0),
-                          _buildMonthDoubleBar('May', 0.12, 0.02),
-                          _buildMonthDoubleBar('Jun', 0.94, 0.46),
-                          _buildMonthDoubleBar('Jul', 0.98, 0.55),
-                        ],
+                      AnimatedBuilder(
+                        animation: _animationController,
+                        builder: (context, child) {
+                          final animValue = _animationController.value;
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: List.generate(_monthLabels.length, (index) {
+                              final label = _monthLabels[index];
+                              final incRatio = _incomeRatios[index] * animValue;
+                              final expRatio = _expenseRatios[index] * animValue;
+                              return _buildMonthDoubleBar(label, incRatio, expRatio);
+                            }),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -306,8 +699,117 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
     );
   }
 
+  Widget _buildGastoIngresoToggle() {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 1.0),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: () {
+              if (!_isGastoFilter) {
+                setState(() {
+                  _isGastoFilter = true;
+                });
+                _animationController.forward(from: 0.0);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isGastoFilter ? AppColors.cardBg : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Egresos',
+                style: TextStyle(
+                  color: _isGastoFilter ? AppColors.coral : AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              if (_isGastoFilter) {
+                setState(() {
+                  _isGastoFilter = false;
+                });
+                _animationController.forward(from: 0.0);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: !_isGastoFilter ? AppColors.cardBg : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Ingresos',
+                style: TextStyle(
+                  color: !_isGastoFilter ? AppColors.mint : AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- TAB 2: CATEGORÍAS ---
   Widget _buildCategoriasView() {
+    final categoryDataList = _isGastoFilter ? _expenseCategoryDataList : _incomeCategoryDataList;
+    final doughnutSections = _isGastoFilter ? _expenseDoughnutSections : _incomeDoughnutSections;
+
+    if (categoryDataList.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.border, width: 1.0),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _isGastoFilter ? 'Egresos por categoría' : 'Ingresos por categoría',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                _buildGastoIngresoToggle(),
+              ],
+            ),
+            const SizedBox(height: 40),
+            Center(
+              child: Text(
+                _isGastoFilter
+                    ? 'No hay egresos registrados en este período'
+                    : 'No hay ingresos registrados en este período',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -318,87 +820,74 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Gastos por categoría',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _isGastoFilter ? 'Egresos por categoría' : 'Ingresos por categoría',
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              _buildGastoIngresoToggle(),
+            ],
           ),
           const SizedBox(height: 24),
 
           // Doughnut Ring Chart Center Render
-          Center(
-            child: SizedBox(
-              width: 160,
-              height: 160,
-              child: CustomPaint(
-                painter: DoughnutChartPainter(
-                  sections: [
-                    DoughnutSection(percentage: 0.39, color: const Color(0xFFFB923C)), // Vivienda
-                    DoughnutSection(percentage: 0.16, color: const Color(0xFF34D399)), // Alimentación
-                    DoughnutSection(percentage: 0.11, color: const Color(0xFFFBBF24)), // Entretenimiento
-                    DoughnutSection(percentage: 0.11, color: const Color(0xFFF87171)), // Salud
-                    DoughnutSection(percentage: 0.09, color: const Color(0xFF22D3EE)), // Servicios
-                    DoughnutSection(percentage: 0.08, color: const Color(0xFFC084FC)), // Ropa
-                    DoughnutSection(percentage: 0.06, color: const Color(0xFF60A5FA)), // Educación
-                  ],
+          AnimatedBuilder(
+            animation: _animationController,
+            builder: (context, child) {
+              final animVal = _animationController.value;
+              final animatedSections = doughnutSections.map((sec) {
+                return DoughnutSection(
+                  percentage: sec.percentage * animVal,
+                  color: sec.color,
+                );
+              }).toList();
+
+              return Center(
+                child: SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: CustomPaint(
+                    painter: DoughnutChartPainter(
+                      sections: animatedSections,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
           const SizedBox(height: 28),
 
           // Detailed breakdown Category List
-          _buildCategoryBreakdownRow(
-            icon: Icons.home_rounded,
-            iconColor: const Color(0xFFFB923C),
-            name: 'Vivienda',
-            percent: '39%',
-            amount: '\$9,000',
-          ),
-          _buildCategoryBreakdownRow(
-            icon: Icons.shopping_cart_rounded,
-            iconColor: const Color(0xFF34D399),
-            name: 'Alimentación',
-            percent: '16%',
-            amount: '\$3,720',
-          ),
-          _buildCategoryBreakdownRow(
-            icon: Icons.movie_creation_rounded,
-            iconColor: const Color(0xFFFBBF24),
-            name: 'Entretenimiento',
-            percent: '11%',
-            amount: '\$2,599',
-          ),
-          _buildCategoryBreakdownRow(
-            icon: Icons.medical_services_rounded,
-            iconColor: const Color(0xFFF87171),
-            name: 'Salud',
-            percent: '11%',
-            amount: '\$2,480',
-          ),
-          _buildCategoryBreakdownRow(
-            icon: Icons.lightbulb_rounded,
-            iconColor: const Color(0xFF22D3EE),
-            name: 'Servicios',
-            percent: '9%',
-            amount: '\$2,040',
-          ),
-          _buildCategoryBreakdownRow(
-            icon: Icons.checkroom_rounded,
-            iconColor: const Color(0xFFC084FC),
-            name: 'Ropa',
-            percent: '8%',
-            amount: '\$1,770',
-          ),
-          _buildCategoryBreakdownRow(
-            icon: Icons.menu_book_rounded,
-            iconColor: const Color(0xFF60A5FA),
-            name: 'Educación',
-            percent: '6%',
-            amount: '\$1,500',
+          AnimatedBuilder(
+            animation: _animationController,
+            builder: (context, child) {
+              final animVal = _animationController.value;
+              return Column(
+                children: categoryDataList.map((c) {
+                  final iconName = c['icono'] as String;
+                  final icon = _getCategoryIcon(iconName);
+                  final colorStr = c['color'] as String;
+                  final iconColor = _parseCategoryColor(colorStr);
+                  final double percentageVal = c['percentage'] as double;
+                  final percentText = '${(percentageVal * 100).toStringAsFixed(0)}%';
+
+                  return _buildCategoryBreakdownRow(
+                    icon: icon,
+                    iconColor: iconColor,
+                    name: c['nombre'] as String,
+                    percent: percentText,
+                    amount: _formatMoney(c['total'] as double),
+                    animProgress: animVal,
+                  );
+                }).toList(),
+              );
+            },
           ),
         ],
       ),
@@ -411,6 +900,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
     required String name,
     required String percent,
     required String amount,
+    required double animProgress,
   }) {
     double barRatio = double.parse(percent.replaceAll('%', '')) / 100.0;
     return Padding(
@@ -452,7 +942,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
               alignment: Alignment.centerLeft,
               color: AppColors.border.withOpacity(0.3),
               child: FractionallySizedBox(
-                widthFactor: barRatio,
+                widthFactor: barRatio * animProgress,
                 child: Container(color: iconColor),
               ),
             ),
@@ -464,6 +954,15 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
 
   // --- TAB 3: TENDENCIA ---
   Widget _buildTendenciaView() {
+    final yMax = _maxMonthVal;
+    final yLabels = [
+      _formatAxisLabel(yMax),
+      _formatAxisLabel(yMax * 0.75),
+      _formatAxisLabel(yMax * 0.5),
+      _formatAxisLabel(yMax * 0.25),
+      '\$0',
+    ];
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -492,13 +991,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                 Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: const [
-                    Text('\$24k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$18k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$12k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$6k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Text('\$0k', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                  ],
+                  children: yLabels.map((lbl) => Text(lbl, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10))).toList(),
                 ),
                 const SizedBox(width: 14),
                 // Custom Canvas Area
@@ -516,14 +1009,24 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                         }),
                       ),
                       // Custom Paint Lines
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: TrendLinePainter(
-                            ingresosPoints: [0.0, 0.0, 0.0, 0.12, 0.94, 0.98],
-                            gastosPoints: [0.0, 0.0, 0.0, 0.02, 0.46, 0.55],
-                            ahorroPoints: [0.0, 0.0, 0.0, 0.10, 0.48, 0.43],
-                          ),
-                        ),
+                      AnimatedBuilder(
+                        animation: _animationController,
+                        builder: (context, child) {
+                          final val = _animationController.value;
+                          final animatedIngresos = _incomeRatios.map((r) => r * val).toList();
+                          final animatedGastos = _expenseRatios.map((r) => r * val).toList();
+                          final animatedAhorro = _savingsRatios.map((r) => r * val).toList();
+
+                          return Positioned.fill(
+                            child: CustomPaint(
+                              painter: TrendLinePainter(
+                                ingresosPoints: animatedIngresos.isEmpty ? List.generate(6, (_) => 0.0) : animatedIngresos,
+                                gastosPoints: animatedGastos.isEmpty ? List.generate(6, (_) => 0.0) : animatedGastos,
+                                ahorroPoints: animatedAhorro.isEmpty ? List.generate(6, (_) => 0.0) : animatedAhorro,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       // Bottom X labels positioned overlay
                       Positioned(
@@ -532,14 +1035,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                         right: 0,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
-                            Text('Feb', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                            Text('Mar', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                            Text('Abr', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                            Text('May', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                            Text('Jun', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                            Text('Jul', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                          ],
+                          children: _monthLabels.map((lbl) => Text(lbl, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10))).toList(),
                         ),
                       ),
                     ],
@@ -613,28 +1109,28 @@ class DoughnutChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double radius = size.width / 2;
     final Rect rect = Rect.fromCircle(center: Offset(radius, radius), radius: radius - 12);
-    
+
     double startAngle = -math.pi / 2; // Start from top
     const double gapAngle = 0.04;      // Micro gap spacing between arcs
 
     final Paint paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 24
-      ..strokeCap = StrokeCap.square; // Straight caps for gaps
+      ..strokeCap = StrokeCap.square;
 
     for (var section in sections) {
       if (section.percentage == 0) continue;
-      
+
       final sweepAngle = (section.percentage * 2 * math.pi) - gapAngle;
       paint.color = section.color;
-      
+
       canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
       startAngle += sweepAngle + gapAngle;
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 // --- TREND LINE PAINTER ---
@@ -653,7 +1149,7 @@ class TrendLinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double width = size.width;
     final double height = size.height;
-    
+
     // Bottom padding for X labels
     final double chartHeight = height - 20;
 
@@ -672,8 +1168,9 @@ class TrendLinePainter extends CustomPainter {
     bool isDashed,
   ) {
     final int count = ratios.length;
+    if (count < 2) return;
     final double step = width / (count - 1);
-    
+
     final Paint linePaint = Paint()
       ..color = color
       ..strokeWidth = 2.5
@@ -692,36 +1189,35 @@ class TrendLinePainter extends CustomPainter {
     final List<Offset> points = [];
     for (int i = 0; i < count; i++) {
       final double x = i * step;
-      final double y = height - (ratios[i] * (height - 10)) - 5;
+      final double ratioVal = i < ratios.length ? ratios[i] : 0.0;
+      final double y = height - (ratioVal * (height - 10)) - 5;
       points.add(Offset(x, y));
     }
 
     // Draw smooth bezier line or segment path
     final Path path = Path();
     path.moveTo(points[0].dx, points[0].dy);
-    
+
     for (int i = 0; i < count - 1; i++) {
-      // Bezier curve interpolation points
       final double x1 = points[i].dx;
       final double y1 = points[i].dy;
       final double x2 = points[i + 1].dx;
       final double y2 = points[i + 1].dy;
-      
+
       final double cx1 = x1 + (x2 - x1) / 2.0;
       final double cy1 = y1;
       final double cx2 = x1 + (x2 - x1) / 2.0;
       final double cy2 = y2;
-      
+
       path.cubicTo(cx1, cy1, cx2, cy2, x2, y2);
     }
 
     if (isDashed) {
-      // Draw dashed path using path metrics
       final Path dashedPath = Path();
       const double dashWidth = 5.0;
       const double dashSpace = 4.0;
       double distance = 0.0;
-      
+
       for (final PathMetric metric in path.computeMetrics()) {
         while (distance < metric.length) {
           dashedPath.addPath(
@@ -738,12 +1234,11 @@ class TrendLinePainter extends CustomPainter {
 
     // Draw dots at each month data point
     for (var point in points) {
-      // Outer border circle
       canvas.drawCircle(point, 5, dotPaint);
       canvas.drawCircle(point, 2.5, outerDotPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

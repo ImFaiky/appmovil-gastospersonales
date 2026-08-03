@@ -6,6 +6,7 @@ import 'package:gastosmart/repositories/movimientoRepository.dart';
 import 'package:gastosmart/repositories/usuarioRepository.dart';
 import '../theme/app_colors.dart';
 import 'login_screen.dart';
+import 'perfil_screen.dart';
 import 'transaction_form_screen.dart';
 
 class InicioScreen extends StatefulWidget {
@@ -102,8 +103,12 @@ class _InicioScreenState extends State<InicioScreen> {
   String _formatMoney(double amount) {
     final isNegative = amount < 0;
     final absAmount = amount.abs();
-    // Formatear con separadores de miles
-    final parts = absAmount.toStringAsFixed(0).split('');
+    // Formatear con separadores de miles y 2 decimales
+    final fixed = absAmount.toStringAsFixed(2);
+    final dotIndex = fixed.indexOf('.');
+    final intPart = fixed.substring(0, dotIndex);
+    final decPart = fixed.substring(dotIndex);
+    final parts = intPart.split('');
     final buffer = StringBuffer();
     for (int i = 0; i < parts.length; i++) {
       if (i > 0 && (parts.length - i) % 3 == 0) {
@@ -111,7 +116,7 @@ class _InicioScreenState extends State<InicioScreen> {
       }
       buffer.write(parts[i]);
     }
-    return '${isNegative ? '-' : ''}\$${buffer.toString()}';
+    return '${isNegative ? '-' : ''}\$$buffer$decPart';
   }
 
   // Obtener icono según el tipo de cuenta
@@ -226,30 +231,62 @@ class _InicioScreenState extends State<InicioScreen> {
                       ),
                     ],
                   ),
-                  GestureDetector(
-                    onTap: () {
-                      // Logout back to LoginScreen
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () async {
+                          final result = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => PerfilScreen(userId: widget.userId),
+                            ),
+                          );
+                          if (result == true) {
+                            _loadData();
+                          }
+                        },
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.border, width: 1.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.person_rounded,
+                              size: 18,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ),
-                      );
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.border, width: 1.5),
-                        shape: BoxShape.circle,
                       ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.lock_outline_rounded,
-                          size: 18,
-                          color: AppColors.textSecondary,
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: () {
+                          // Logout back to LoginScreen
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (context) => const LoginScreen(),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.border, width: 1.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.lock_outline_rounded,
+                              size: 18,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -484,6 +521,9 @@ class _InicioScreenState extends State<InicioScreen> {
                         ),
                       )
                     : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
                         scrollDirection: Axis.horizontal,
                         itemCount: _cuentas.length,
                         itemBuilder: (context, index) {

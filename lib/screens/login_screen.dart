@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import 'main_navigation_screen.dart';
 import '../repositories/usuarioRepository.dart';
 import '../entities/usuarioModel.dart';
+import 'dart:async';
 
 enum LoginState {
   loginPin,
@@ -16,7 +17,7 @@ enum LoginState {
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
-  static String userName = 'andres';
+  static String userName = 'Usuario';
 
   static List<Map<String, String>> mockUsers = [];
 
@@ -29,6 +30,10 @@ class _LoginScreenState extends State<LoginScreen> {
   int _selectedUserIndex = 0;
   String _enteredPin = '';
   String? _loginPinError;
+
+  final Map<int, int> _failedAttemptsMap = {};
+  final Map<int, int> _lockoutSecondsMap = {};
+  final Map<int, Timer?> _lockoutTimersMap = {};
 
   // Onboarding controllers and states
   final _nameController = TextEditingController();
@@ -71,6 +76,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    for (var timer in _lockoutTimersMap.values) {
+      timer?.cancel();
+    }
     _nameController.dispose();
     _pinController.dispose();
     _confirmPinController.dispose();
@@ -92,20 +100,76 @@ class _LoginScreenState extends State<LoginScreen> {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
 
+    if (!RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$').hasMatch(cleanName)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('El nombre solo puede contener letras.'),
+            backgroundColor: AppColors.coral,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
     try {
       final existingUsers = await _usuarioRepository.getAll();
-      final exists = existingUsers.any((u) => u.nombre.trim().toLowerCase() == cleanName.toLowerCase());
+      final exists = existingUsers.any(
+        (u) => u.nombre.trim().toLowerCase() == cleanName.toLowerCase(),
+      );
       if (exists) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('El usuario "$cleanName" ya existe. Por favor, elige otro nombre.'),
-              backgroundColor: AppColors.coral,
-            ),
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                backgroundColor: AppColors.cardBg,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: AppColors.border, width: 1),
+                ),
+                title: Row(
+                  children: const [
+                    Icon(
+                      Icons.error_outline_rounded,
+                      color: AppColors.coral,
+                      size: 28,
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Usuario duplicado',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                content: Text(
+                  'El usuario "$cleanName" ya existe. Por favor, elige otro nombre.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Aceptar',
+                      style: TextStyle(
+                        color: AppColors.mint,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         }
       } else {
@@ -127,7 +191,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _saveUserAndFinish() async {
-    final name = _nameController.text.trim().isEmpty ? 'Andrés' : _nameController.text.trim();
+    final name = _nameController.text.trim().isEmpty
+        ? 'Usuario'
+        : _nameController.text.trim();
     final pinStr = _pinController.text.isEmpty ? '111111' : _pinController.text;
 
     setState(() {
@@ -136,7 +202,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final existingUsers = await _usuarioRepository.getAll();
-      final exists = existingUsers.any((u) => u.nombre.trim().toLowerCase() == name.toLowerCase());
+      final exists = existingUsers.any(
+        (u) => u.nombre.trim().toLowerCase() == name.toLowerCase(),
+      );
       if (exists) {
         setState(() {
           _isLoading = false;
@@ -155,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final newUser = UsuarioModel(nombre: name, pin: pinStr);
       final insertedId = await _usuarioRepository.insert(newUser);
       LoginScreen.userName = name;
-      
+
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -194,11 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            color: AppColors.mint,
-          ),
-        ),
+        body: Center(child: CircularProgressIndicator(color: AppColors.mint)),
       );
     }
     return Scaffold(
@@ -220,7 +284,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Content based on state
               _buildStateContent(),
-              
+
               const SizedBox(height: 32),
               // Footer
               Center(
@@ -292,11 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
             color: AppColors.mint,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.check,
-            size: 16,
-            color: AppColors.background,
-          ),
+          child: const Icon(Icons.check, size: 16, color: AppColors.background),
         );
       } else if (isActive) {
         return Container(
@@ -384,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 10),
-        
+
         // SELECCIONA TU CUENTA Label
         const Center(
           child: Text(
@@ -443,7 +503,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       color: AppColors.mint.withOpacity(0.2),
                                       blurRadius: 10,
                                       spreadRadius: 2,
-                                    )
+                                    ),
                                   ]
                                 : null,
                           ),
@@ -485,17 +545,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // PIN Label and Dots
         Center(
-          child: Text(
-            _loginPinError ?? 'Ingresa tu PIN',
-            style: TextStyle(
-              color: _loginPinError != null ? AppColors.coral : AppColors.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+          child: Builder(
+            builder: (context) {
+              final selectedUser =
+                  _usuarios.isNotEmpty && _selectedUserIndex < _usuarios.length
+                  ? _usuarios[_selectedUserIndex]
+                  : null;
+              final userId = selectedUser?.id;
+              final userLockout = userId != null
+                  ? (_lockoutSecondsMap[userId] ?? 0)
+                  : 0;
+              final displayError = userLockout > 0
+                  ? 'Demasiados intentos. Espera $userLockout segundos.'
+                  : _loginPinError;
+
+              return Text(
+                displayError ?? 'Ingresa tu PIN',
+                style: TextStyle(
+                  color:
+                      (userLockout > 0 ||
+                          (displayError != null &&
+                              displayError != 'Ingresa tu PIN' &&
+                              !displayError.startsWith('PIN ')))
+                      ? AppColors.coral
+                      : AppColors.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(height: 20),
-        
+
         // Dynamic Dots Indicator based on selected user's PIN length
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -569,7 +651,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
-        
+
         const SizedBox(height: 32),
         const Divider(color: AppColors.border, height: 1),
         const SizedBox(height: 24),
@@ -688,19 +770,43 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildEmptyKeypadSpace() {
-    return const Expanded(
-      child: SizedBox(
-        height: 64,
-      ),
-    );
+    return const Expanded(child: SizedBox(height: 64));
+  }
+
+  void _startLockoutForUser(int userId) {
+    _lockoutSecondsMap[userId] = 30;
+    _lockoutTimersMap[userId]?.cancel();
+    _lockoutTimersMap[userId] = Timer.periodic(const Duration(seconds: 1), (
+      timer,
+    ) {
+      if (mounted) {
+        setState(() {
+          final remaining = _lockoutSecondsMap[userId] ?? 0;
+          if (remaining > 1) {
+            _lockoutSecondsMap[userId] = remaining - 1;
+          } else {
+            _lockoutSecondsMap[userId] = 0;
+            _failedAttemptsMap[userId] = 0;
+            _lockoutTimersMap[userId]?.cancel();
+          }
+        });
+      } else {
+        timer.cancel();
+      }
+    });
   }
 
   void _handleKeypadTap(String digit) {
     if (_usuarios.isEmpty) return;
+
     final selectedUser = _usuarios[_selectedUserIndex];
+    final userId = selectedUser.id!;
+    final userLockout = _lockoutSecondsMap[userId] ?? 0;
+    if (userLockout > 0) return; // Block input during lockout for this user
+
     final correctPin = selectedUser.pin;
     if (_enteredPin.length >= correctPin.length) return;
-    
+
     setState(() {
       _loginPinError = null;
       _enteredPin += digit;
@@ -709,10 +815,14 @@ class _LoginScreenState extends State<LoginScreen> {
     // Check if PIN is fully entered
     if (_enteredPin.length == correctPin.length) {
       if (_enteredPin == selectedUser.pin) {
+        _failedAttemptsMap[userId] = 0;
+        _lockoutSecondsMap[userId] = 0;
+        _lockoutTimersMap[userId]?.cancel();
         LoginScreen.userName = selectedUser.nombre;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => MainNavigationScreen(userId: selectedUser.id!),
+            builder: (context) =>
+                MainNavigationScreen(userId: selectedUser.id!),
           ),
         );
       } else {
@@ -720,7 +830,13 @@ class _LoginScreenState extends State<LoginScreen> {
         Future.delayed(const Duration(milliseconds: 200), () {
           setState(() {
             _enteredPin = '';
-            _loginPinError = 'PIN incorrecto. Intenta de nuevo.';
+            final attempts = (_failedAttemptsMap[userId] ?? 0) + 1;
+            _failedAttemptsMap[userId] = attempts;
+            if (attempts >= 3) {
+              _startLockoutForUser(userId);
+            } else {
+              _loginPinError = 'PIN incorrecto. Intento $attempts de 3';
+            }
           });
         });
       }
@@ -739,7 +855,11 @@ class _LoginScreenState extends State<LoginScreen> {
   // --- 2. Onboarding Paso 1: Nombre ---
   Widget _buildOnboardingNameView() {
     final name = _nameController.text.trim();
-    final initialLetter = name.isNotEmpty ? name[0].toUpperCase() : 'A';
+    final isNameValid =
+        name.isEmpty || RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$').hasMatch(name);
+    final initialLetter = name.isNotEmpty && isNameValid
+        ? name[0].toUpperCase()
+        : 'T';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -754,11 +874,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '¿Cómo te llamas? Así personalizamos tu experiencia.',
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 16,
-          ),
+          '¿Cómo te llamas? Ingresa solo letras para personalizar tu experiencia.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
         ),
         const SizedBox(height: 36),
         const Text(
@@ -776,7 +893,8 @@ class _LoginScreenState extends State<LoginScreen> {
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
-            hintText: 'Andrés',
+            hintText: 'Tu nombre',
+            errorText: isNameValid ? null : 'El nombre solo acepta letras',
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: AppColors.mint, width: 1.5),
@@ -784,14 +902,16 @@ class _LoginScreenState extends State<LoginScreen> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: _nameController.text.isNotEmpty ? AppColors.mint : AppColors.inputBorder,
+                color: _nameController.text.isNotEmpty
+                    ? AppColors.mint
+                    : AppColors.inputBorder,
                 width: 1.5,
               ),
             ),
           ),
         ),
         const SizedBox(height: 24),
-        
+
         // Live Profile Preview Card
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -808,7 +928,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF0F2B23),
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.mint.withOpacity(0.4), width: 1),
+                  border: Border.all(
+                    color: AppColors.mint.withOpacity(0.4),
+                    width: 1,
+                  ),
                 ),
                 child: Center(
                   child: Text(
@@ -827,7 +950,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name.isEmpty ? 'Andrés' : name,
+                      name.isEmpty ? 'Tu Nombre' : name,
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 16,
@@ -853,7 +976,7 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(
           height: 56,
           child: ElevatedButton(
-            onPressed: name.isNotEmpty
+            onPressed: (name.isNotEmpty && isNameValid)
                 ? () => _checkNameAndContinue(name)
                 : null,
             style: ElevatedButton.styleFrom(
@@ -870,16 +993,65 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Text(
                   'Continuar ',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Icon(Icons.chevron_right_rounded, size: 20),
               ],
             ),
           ),
         ),
+        if (_usuarios.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _nameController.clear();
+                _pinController.clear();
+                _confirmPinController.clear();
+                _state = LoginState.loginPin;
+              });
+            },
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg.withOpacity(0.3),
+                border: Border.all(color: AppColors.border, width: 1.5),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.border, width: 1),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.arrow_back_rounded,
+                        color: AppColors.coral,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Regresar a Cuentas',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -887,7 +1059,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // --- 3. Onboarding Paso 2: Crear PIN ---
   Widget _buildOnboardingPinView() {
     final len = _pinController.text.length;
-    
+
     // Compute indicators
     Color bar1 = const Color(0xFF1E293B);
     Color bar2 = const Color(0xFF1E293B);
@@ -896,27 +1068,27 @@ class _LoginScreenState extends State<LoginScreen> {
     String strengthText = '';
     Color strengthColor = AppColors.textSecondary;
 
-    if (len > 0 && len < 4) {
+    if (len > 0 && len < 6) {
       bar1 = AppColors.coral;
-      strengthText = 'PIN muy corto';
+      strengthText = 'PIN muy corto (mín. 6 dígitos)';
       strengthColor = AppColors.coral;
-    } else if (len == 4) {
+    } else if (len == 6) {
       bar1 = const Color(0xFFF1B44C);
       bar2 = const Color(0xFFF1B44C);
       strengthText = 'PIN simple';
       strengthColor = const Color(0xFFF1B44C);
-    } else if (len == 5) {
+    } else if (len == 7) {
       bar1 = AppColors.mint;
       bar2 = AppColors.mint;
       bar3 = AppColors.mint;
       strengthText = 'PIN seguro';
       strengthColor = AppColors.mint;
-    } else if (len >= 6) {
+    } else if (len == 8) {
       bar1 = AppColors.mint;
       bar2 = AppColors.mint;
       bar3 = AppColors.mint;
       bar4 = AppColors.mint;
-      strengthText = 'PIN seguro ✓';
+      strengthText = 'PIN muy seguro ✓';
       strengthColor = AppColors.mint;
     }
 
@@ -933,11 +1105,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Este PIN protegerá tu información. Mínimo 4 dígitos.',
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 16,
-          ),
+          'Este PIN protegerá tu información. Mínimo 6 y máximo 8 dígitos.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
         ),
         const SizedBox(height: 36),
         const Text(
@@ -955,21 +1124,30 @@ class _LoginScreenState extends State<LoginScreen> {
           obscureText: _obscurePin,
           keyboardType: TextInputType.number,
           style: const TextStyle(
-            color: AppColors.textPrimary, 
+            color: AppColors.textPrimary,
             fontSize: 20,
             letterSpacing: 8,
           ),
           inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(8),
           ],
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: '••••••',
             hintStyle: const TextStyle(letterSpacing: 8, fontSize: 20),
+            helperText: 'Debe contener entre 6 y 8 números',
+            helperStyle: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+            errorText: RegExp(r'^\d*$').hasMatch(_pinController.text)
+                ? null
+                : 'El PIN solo acepta números, no letras',
             suffixIcon: IconButton(
               icon: Icon(
-                _obscurePin ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                _obscurePin
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
                 color: AppColors.textSecondary,
               ),
               onPressed: () {
@@ -985,24 +1163,58 @@ class _LoginScreenState extends State<LoginScreen> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: _pinController.text.isNotEmpty ? AppColors.mint : AppColors.inputBorder,
+                color: _pinController.text.isNotEmpty
+                    ? AppColors.mint
+                    : AppColors.inputBorder,
                 width: 1.5,
               ),
             ),
           ),
         ),
         const SizedBox(height: 16),
-        
+
         // Strength bars
         Row(
           children: [
-            Expanded(child: Container(height: 4, decoration: BoxDecoration(color: bar1, borderRadius: BorderRadius.circular(2)))),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: bar1,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             const SizedBox(width: 6),
-            Expanded(child: Container(height: 4, decoration: BoxDecoration(color: bar2, borderRadius: BorderRadius.circular(2)))),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: bar2,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             const SizedBox(width: 6),
-            Expanded(child: Container(height: 4, decoration: BoxDecoration(color: bar3, borderRadius: BorderRadius.circular(2)))),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: bar3,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             const SizedBox(width: 6),
-            Expanded(child: Container(height: 4, decoration: BoxDecoration(color: bar4, borderRadius: BorderRadius.circular(2)))),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: bar4,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
           ],
         ),
         if (strengthText.isNotEmpty) ...[
@@ -1021,7 +1233,7 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(
           height: 56,
           child: ElevatedButton(
-            onPressed: len >= 4
+            onPressed: (len >= 6 && RegExp(r'^\d+$').hasMatch(_pinController.text))
                 ? () => setState(() => _state = LoginState.onboardingConfirmPin)
                 : null,
             style: ElevatedButton.styleFrom(
@@ -1038,12 +1250,56 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Text(
                   'Continuar ',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 20),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _state = LoginState.onboardingName;
+            });
+          },
+          child: Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.cardBg.withOpacity(0.3),
+              border: Border.all(color: AppColors.border, width: 1.5),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.border, width: 1),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      color: AppColors.coral,
+                      size: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Atrás',
                   style: TextStyle(
-                    fontSize: 16,
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, size: 20),
               ],
             ),
           ),
@@ -1071,10 +1327,7 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 8),
         const Text(
           'Ingresa el mismo PIN para confirmar.',
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 16,
-          ),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
         ),
         const SizedBox(height: 36),
         const Text(
@@ -1092,21 +1345,25 @@ class _LoginScreenState extends State<LoginScreen> {
           obscureText: _obscureConfirmPin,
           keyboardType: TextInputType.number,
           style: const TextStyle(
-            color: AppColors.textPrimary, 
+            color: AppColors.textPrimary,
             fontSize: 20,
             letterSpacing: 8,
           ),
           inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(8),
           ],
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: '••••••',
             hintStyle: const TextStyle(letterSpacing: 8, fontSize: 20),
+            errorText: RegExp(r'^\d*$').hasMatch(_confirmPinController.text)
+                ? null
+                : 'El PIN solo acepta números, no letras',
             suffixIcon: IconButton(
               icon: Icon(
-                _obscureConfirmPin ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                _obscureConfirmPin
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
                 color: AppColors.textSecondary,
               ),
               onPressed: () {
@@ -1122,7 +1379,9 @@ class _LoginScreenState extends State<LoginScreen> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: _confirmPinController.text.isNotEmpty ? AppColors.mint : AppColors.inputBorder,
+                color: _confirmPinController.text.isNotEmpty
+                    ? AppColors.mint
+                    : AppColors.inputBorder,
                 width: 1.5,
               ),
             ),
@@ -1157,10 +1416,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Text(
                   'Crear cuenta ',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Icon(Icons.check_rounded, size: 20),
               ],
@@ -1192,7 +1448,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // --- 5. Onboarding Paso 4: Éxito ---
   Widget _buildOnboardingSuccessView() {
     final name = _nameController.text.trim();
-    final initialLetter = name.isNotEmpty ? name[0].toUpperCase() : 'A';
+    final initialLetter = name.isNotEmpty ? name[0].toUpperCase() : 'U';
     final pinDigits = _pinController.text.length;
 
     return Column(
@@ -1236,13 +1492,10 @@ class _LoginScreenState extends State<LoginScreen> {
         const Text(
           'Tu cuenta está creada y protegida con tu PIN. Empieza a controlar tus finanzas.',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 15,
-          ),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
         ),
         const SizedBox(height: 36),
-        
+
         // Profile Card
         Container(
           padding: const EdgeInsets.all(20),
@@ -1269,7 +1522,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Text(
                     'Nombre',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
                   ),
                   Text(
                     name,
@@ -1289,7 +1545,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Text(
                     'Seguridad',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
                   ),
                   Text(
                     'PIN de $pinDigits dígitos ✓',
@@ -1323,10 +1582,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Text(
                   'Entrar a GastoSmart ',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Icon(Icons.arrow_forward_rounded, size: 20),
               ],

@@ -5,11 +5,13 @@ import '../repositories/movimientoRepository.dart';
 import '../repositories/cuentaRepository.dart';
 import '../entities/cuentaModel.dart';
 import '../settings/db_conection.dart';
+import 'account_form_screen.dart';
 
 class TransactionFormScreen extends StatefulWidget {
   final int userId;
   final String? initialType;
-  const TransactionFormScreen({super.key, required this.userId, this.initialType});
+  final Movimientomodel? movement;
+  const TransactionFormScreen({super.key, required this.userId, this.initialType, this.movement});
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -17,7 +19,8 @@ class TransactionFormScreen extends StatefulWidget {
 
 class _TransactionFormScreenState extends State<TransactionFormScreen> {
   final _conceptController = TextEditingController();
-  final _amountController = TextEditingController(text: '0.00');
+  final _amountController = TextEditingController();
+  final _amountFocusNode = FocusNode();
   
   late bool _isGasto;
   DateTime _selectedDate = DateTime.now();
@@ -32,11 +35,32 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   int? _selectedAccountId;
   int? _selectedCategoryId;
   bool _isLoading = true;
+  String? _conceptError;
+  String? _amountError;
 
   @override
   void initState() {
     super.initState();
-    _isGasto = widget.initialType != 'Ingreso';
+    _amountFocusNode.addListener(() {
+      if (_amountFocusNode.hasFocus) {
+        _amountController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _amountController.text.length,
+        );
+      }
+    });
+
+    if (widget.movement != null) {
+      final mov = widget.movement!;
+      _conceptController.text = mov.descripcion;
+      _amountController.text = mov.monto.toStringAsFixed(2);
+      _isGasto = mov.tipo == 'gasto';
+      _selectedDate = mov.fecha;
+      _selectedAccountId = mov.cuentaId;
+      _selectedCategoryId = mov.categoriaId;
+    } else {
+      _isGasto = widget.initialType != 'Ingreso';
+    }
     _loadData();
   }
 
@@ -46,20 +70,27 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       final categoriesResult = await _db.getAll('categorias');
 
       if (mounted) {
+        if (accounts.isEmpty) {
+          _showNoAccountDialog();
+          return;
+        }
+
         setState(() {
           _realAccounts = accounts;
           _realCategories = categoriesResult;
           _isLoading = false;
 
           // Set default selected account ID
-          if (_realAccounts.isNotEmpty) {
+          if (_selectedAccountId == null && _realAccounts.isNotEmpty) {
             _selectedAccountId = _realAccounts[0].id;
           }
 
           // Set default category ID based on type
-          final activeCats = _getActiveCategories();
-          if (activeCats.isNotEmpty) {
-            _selectedCategoryId = activeCats[0]['id'] as int;
+          if (_selectedCategoryId == null) {
+            final activeCats = _getActiveCategories();
+            if (activeCats.isNotEmpty) {
+              _selectedCategoryId = activeCats[0]['id'] as int;
+            }
           }
         });
       }
@@ -72,6 +103,69 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
   }
 
+  void _showNoAccountDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.cardBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppColors.border, width: 1),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: AppColors.coral, size: 28),
+              SizedBox(width: 10),
+              Text(
+                'Sin cuentas',
+                style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Primero debes crear una cuenta antes de registrar una nueva transacción.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                Navigator.of(context).pop();
+              },
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                final created = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (context) => AccountFormScreen(userId: widget.userId),
+                  ),
+                );
+                if (created == true) {
+                  _loadData();
+                } else {
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                  }
+                }
+              },
+              child: const Text(
+                'Crear cuenta',
+                style: TextStyle(color: AppColors.mint, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   List<Map<String, dynamic>> _getActiveCategories() {
     final targetType = _isGasto ? 'gasto' : 'ingreso';
     return _realCategories.where((cat) => cat['tipo'] == targetType).toList();
@@ -81,6 +175,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   void dispose() {
     _conceptController.dispose();
     _amountController.dispose();
+    _amountFocusNode.dispose();
     super.dispose();
   }
 
@@ -123,9 +218,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Nueva transacción',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
+        title: Text(
+          widget.movement != null ? 'Editar transacción' : 'Nueva transacción',
+          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -170,6 +265,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         IntrinsicWidth(
                           child: TextField(
                             controller: _amountController,
+                            focusNode: _amountFocusNode,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             textAlign: TextAlign.center,
                             style: const TextStyle(
@@ -187,10 +283,28 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                               fillColor: Colors.transparent,
                               filled: false,
                             ),
+                            onChanged: (value) {
+                              setState(() {
+                                if (value.isNotEmpty &&
+                                    !RegExp(r'^\d+(\.\d{0,2})?$').hasMatch(value)) {
+                                  _amountError = 'El monto solo acepta números, no letras';
+                                } else {
+                                  _amountError = null;
+                                }
+                              });
+                            },
                           ),
                         ),
                       ],
                     ),
+                    if (_amountError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _amountError!,
+                        style: const TextStyle(color: AppColors.coral, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -285,9 +399,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               TextField(
                 controller: _conceptController,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                decoration: const InputDecoration(
-                  hintText: 'Ej. Supermercado, Salario...',
+                decoration: InputDecoration(
+                  hintText: 'Ej. Compra en el supermercado, Pago de salario',
+                  helperText: 'Describe brevemente para qué fue el movimiento (solo letras).',
+                  helperMaxLines: 2,
+                  errorText: _conceptError,
                 ),
+                onChanged: (value) {
+                  setState(() {
+                    if (value.isNotEmpty &&
+                        !RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$').hasMatch(value)) {
+                      _conceptError = 'El concepto solo puede contener letras.';
+                    } else {
+                      _conceptError = null;
+                    }
+                  });
+                },
               ),
               const SizedBox(height: 24),
 
@@ -305,7 +432,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBg.withOpacity(0.5),
+                  color: AppColors.cardBg.withAlpha(128),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.inputBorder, width: 1.5),
                 ),
@@ -351,7 +478,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBg.withOpacity(0.5),
+                  color: AppColors.cardBg.withAlpha(128),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.inputBorder, width: 1.5),
                 ),
@@ -399,7 +526,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   decoration: BoxDecoration(
-                    color: AppColors.cardBg.withOpacity(0.5),
+                    color: AppColors.cardBg.withAlpha(128),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppColors.inputBorder, width: 1.5),
                   ),
@@ -433,6 +560,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       return;
                     }
 
+                    final conceptRegExp = RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$');
+                    if (!conceptRegExp.hasMatch(concept)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('El concepto solo puede contener letras.'),
+                          backgroundColor: AppColors.coral,
+                        ),
+                      );
+                      return;
+                    }
+
                     final now = DateTime.now();
                     final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
                     if (_selectedDate.isAfter(today)) {
@@ -445,6 +583,21 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     if (amount <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Por favor, ingresa un monto válido mayor a 0')),
+                      );
+                      return;
+                    }
+
+                    if (amount > 999999999.00) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('El monto ingresado es demasiado grande (máximo 999,999,999.00)')),
+                      );
+                      return;
+                    }
+
+                    final amountRegExp = RegExp(r'^\d+(\.\d{1,2})?$');
+                    if (!amountRegExp.hasMatch(amountStr)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Por favor, ingresa un formato de monto válido (Ej. 10.50)')),
                       );
                       return;
                     }
@@ -463,36 +616,97 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       return;
                     }
 
-                    try {
-                      // 1. Create movement
-                      final newMovement = Movimientomodel(
-                        tipo: _isGasto ? 'gasto' : 'ingreso',
-                        monto: amount,
-                        descripcion: concept,
-                        fecha: _selectedDate,
-                        cuentaId: _selectedAccountId!,
-                        categoriaId: _selectedCategoryId!,
-                      );
-
-                      // 2. Insert to Database
-                      await _movimientoRepository.insert(newMovement);
-
-                      // 3. Update Account Balance
-                      final updatedAccount = _realAccounts.firstWhere((acc) => acc.id == _selectedAccountId);
-                      if (_isGasto) {
-                        updatedAccount.saldo -= amount;
+                    final selectedAccount = _realAccounts.firstWhere((acc) => acc.id == _selectedAccountId);
+                    
+                    double availableSaldo = selectedAccount.saldo;
+                    if (widget.movement != null && widget.movement!.cuentaId == selectedAccount.id) {
+                      if (widget.movement!.tipo == 'gasto') {
+                        availableSaldo += widget.movement!.monto;
                       } else {
-                        updatedAccount.saldo += amount;
+                        availableSaldo -= widget.movement!.monto;
                       }
-                      await _cuentaRepository.update(updatedAccount);
+                    }
+
+                    if (_isGasto && amount > availableSaldo) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Saldo insuficiente en la cuenta "${selectedAccount.nombre}" '
+                            '(Disponible: \$${availableSaldo.toStringAsFixed(2)})'
+                          ),
+                          backgroundColor: AppColors.coral,
+                        ),
+                      );
+                      return;
+                    }
+
+                    try {
+                      if (widget.movement == null) {
+                        // 1. Create movement
+                        final newMovement = Movimientomodel(
+                          tipo: _isGasto ? 'gasto' : 'ingreso',
+                          monto: amount,
+                          descripcion: concept,
+                          fecha: _selectedDate,
+                          cuentaId: _selectedAccountId!,
+                          categoriaId: _selectedCategoryId!,
+                        );
+
+                        // 2. Insert to Database
+                        await _movimientoRepository.insert(newMovement);
+
+                        // 3. Update Account Balance
+                        if (_isGasto) {
+                          selectedAccount.saldo -= amount;
+                        } else {
+                          selectedAccount.saldo += amount;
+                        }
+                        await _cuentaRepository.update(selectedAccount);
+                      } else {
+                        final oldMov = widget.movement!;
+                        
+                        // 1. Revert old balance
+                        final oldAccount = _realAccounts.firstWhere((acc) => acc.id == oldMov.cuentaId);
+                        if (oldMov.tipo == 'gasto') {
+                          oldAccount.saldo += oldMov.monto;
+                        } else {
+                          oldAccount.saldo -= oldMov.monto;
+                        }
+                        
+                        // Apply new balance to new account
+                        final newAccount = _realAccounts.firstWhere((acc) => acc.id == _selectedAccountId);
+                        if (_isGasto) {
+                          newAccount.saldo -= amount;
+                        } else {
+                          newAccount.saldo += amount;
+                        }
+
+                        // Save accounts
+                        await _cuentaRepository.update(oldAccount);
+                        if (oldAccount.id != newAccount.id) {
+                          await _cuentaRepository.update(newAccount);
+                        }
+
+                        // 2. Update movement in DB
+                        final updatedMovement = Movimientomodel(
+                          id: oldMov.id,
+                          tipo: _isGasto ? 'gasto' : 'ingreso',
+                          monto: amount,
+                          descripcion: concept,
+                          fecha: _selectedDate,
+                          cuentaId: _selectedAccountId!,
+                          categoriaId: _selectedCategoryId!,
+                        );
+                        await _movimientoRepository.update(updatedMovement);
+                      }
 
                       if (context.mounted) {
-                        Navigator.of(context).pop();
+                        Navigator.of(context).pop(true);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Transacción guardada exitosamente'),
+                          SnackBar(
+                            content: Text(widget.movement != null ? 'Transacción modificada exitosamente' : 'Transacción guardada exitosamente'),
                             backgroundColor: AppColors.mint,
-                            duration: Duration(seconds: 2),
+                            duration: const Duration(seconds: 2),
                           ),
                         );
                       }
@@ -512,9 +726,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Guardar transacción',
-                    style: TextStyle(
+                  child: Text(
+                    widget.movement != null ? 'Guardar cambios' : 'Guardar transacción',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),

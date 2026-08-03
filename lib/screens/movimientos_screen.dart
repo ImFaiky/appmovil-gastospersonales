@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../utils/icon_helper.dart';
 import 'transaction_form_screen.dart';
 import '../entities/movimientoModel.dart';
 import '../repositories/movimientoRepository.dart';
@@ -178,7 +179,11 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
 
   String _formatMoney(double amount) {
     final absAmount = amount.abs();
-    final parts = absAmount.toStringAsFixed(0).split('');
+    final fixed = absAmount.toStringAsFixed(2);
+    final dotIndex = fixed.indexOf('.');
+    final intPart = fixed.substring(0, dotIndex);
+    final decPart = fixed.substring(dotIndex);
+    final parts = intPart.split('');
     final buffer = StringBuffer();
     for (int i = 0; i < parts.length; i++) {
       if (i > 0 && (parts.length - i) % 3 == 0) {
@@ -186,38 +191,11 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
       }
       buffer.write(parts[i]);
     }
-    return buffer.toString();
+    return '$buffer$decPart';
   }
 
   IconData _getIconData(String iconName) {
-    switch (iconName) {
-      case 'shopping_cart_rounded':
-        return Icons.shopping_cart_rounded;
-      case 'directions_bus_rounded':
-        return Icons.directions_bus_rounded;
-      case 'medical_services_rounded':
-        return Icons.medical_services_rounded;
-      case 'menu_book_rounded':
-        return Icons.menu_book_rounded;
-      case 'movie_creation_rounded':
-        return Icons.movie_creation_rounded;
-      case 'home_rounded':
-        return Icons.home_rounded;
-      case 'checkroom_rounded':
-        return Icons.checkroom_rounded;
-      case 'lightbulb_rounded':
-        return Icons.lightbulb_rounded;
-      case 'inventory_2_rounded':
-        return Icons.inventory_2_rounded;
-      case 'work_rounded':
-        return Icons.work_rounded;
-      case 'laptop_chromebook_rounded':
-        return Icons.laptop_chromebook_rounded;
-      case 'trending_up_rounded':
-        return Icons.trending_up_rounded;
-      default:
-        return Icons.help_outline_rounded;
-    }
+    return IconHelper.resolve(iconName);
   }
 
   Color _getColor(String colorStr) {
@@ -671,14 +649,28 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
     required bool isIncome,
     required Movimientomodel movement,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border, width: 1.0),
-      ),
-      child: Row(
+    return GestureDetector(
+      onTap: () async {
+        final result = await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => TransactionFormScreen(
+              userId: widget.userId,
+              movement: movement,
+            ),
+          ),
+        );
+        if (result == true) {
+          _loadFiltersAndData();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.border, width: 1.0),
+        ),
+        child: Row(
         children: [
           // Left Icon
           Container(
@@ -724,22 +716,51 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(width: 14),
-          // Bin/Delete Icon
-          IconButton(
-            icon: Icon(
-              Icons.delete_outline_rounded,
-              color: AppColors.textSecondary.withAlpha(128),
-              size: 20,
-            ),
-            onPressed: () => _showDeleteDialog(context, movement),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+          const SizedBox(width: 12),
+          // Grouped Actions
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.textSecondary.withAlpha(128),
+                  size: 20,
+                ),
+                onPressed: () async {
+                  final result = await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => TransactionFormScreen(
+                        userId: widget.userId,
+                        movement: movement,
+                      ),
+                    ),
+                  );
+                  if (result == true) {
+                    _loadFiltersAndData();
+                  }
+                },
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.textSecondary.withAlpha(128),
+                  size: 20,
+                ),
+                onPressed: () => _showDeleteDialog(context, movement),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showDeleteDialog(BuildContext context, Movimientomodel mov) {
     showDialog(
@@ -786,21 +807,29 @@ class _MovimientosScreenState extends State<MovimientosScreen> {
                   
                   if (context.mounted) {
                     Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Movimiento "${mov.descripcion}" eliminado'),
-                        backgroundColor: AppColors.coral,
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                    _loadFiltersAndData();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Movimiento "${mov.descripcion}" eliminado'),
+                            backgroundColor: AppColors.coral,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                        _loadFiltersAndData();
+                      }
+                    });
                   }
                 } catch (e) {
                   if (context.mounted) {
                     Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error al eliminar: $e')),
-                    );
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error al eliminar: $e')),
+                        );
+                      }
+                    });
                   }
                 }
               },

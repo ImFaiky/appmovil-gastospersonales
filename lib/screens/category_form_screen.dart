@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../utils/icon_helper.dart';
 import '../entities/categoriaModel.dart';
 import '../repositories/categoriaRepository.dart';
 
 class CategoryFormScreen extends StatefulWidget {
-  final CategoriaModel? categoria;
-  const CategoryFormScreen({super.key, this.categoria,});
+  final CategoriaModel? category;
+  const CategoryFormScreen({super.key, this.category});
 
   @override
   State<CategoryFormScreen> createState() => _CategoryFormScreenState();
@@ -26,6 +27,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
   }
 
   final CategoriaRepository _repository = CategoriaRepository();
+  String? _nameError;
   bool _isGasto = true;
 
   IconData _selectedIcon = Icons.shopping_cart_rounded;
@@ -58,17 +60,35 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.category != null) {
+      final cat = widget.category!;
+      _nameController.text = cat.nombre;
+      _isGasto = cat.tipo == 'gasto';
+      try {
+        final codePoint = int.parse(cat.icono);
+        _selectedIcon = IconHelper.resolve(codePoint.toString());
+      } catch (_) {}
+      try {
+        _selectedColor = Color(int.parse(cat.color));
+      } catch (_) {}
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
   }
 
   Future<void> _guardarCategoria() async {
-
-    if (_nameController.text.trim().isEmpty) {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Ingrese el nombre de la categoría"),
+          backgroundColor: AppColors.coral,
         ),
       );
       return;
@@ -87,28 +107,48 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
       return;
     }
 
-    CategoriaModel categoria = CategoriaModel(
-      nombre: _nameController.text.trim(),
-      tipo: _isGasto ? "gasto" : "ingreso",
-      icono: _selectedIcon.codePoint.toString(),
-      color: _selectedColor.value.toString(),
-    );
-
-    if (widget.categoria == null) {
-
-      await _repository.insert(categoria);
-
-    } else {
-
-      categoria.id = widget.categoria!.id;
-
-      await _repository.update(categoria);
-
+    final nameRegExp = RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$');
+    if (!nameRegExp.hasMatch(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El nombre solo puede contener letras, no números.'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
     }
 
-    if (!mounted) return;
+    try {
+      if (widget.category == null) {
+        CategoriaModel categoria = CategoriaModel(
+          nombre: name,
+          tipo: _isGasto ? "gasto" : "ingreso",
+          icono: _selectedIcon.codePoint.toString(),
+          color: _selectedColor.toARGB32().toString(),
+        );
+        await _repository.insert(categoria);
+      } else {
+        CategoriaModel categoria = CategoriaModel(
+          id: widget.category!.id,
+          nombre: name,
+          tipo: _isGasto ? "gasto" : "ingreso",
+          icono: _selectedIcon.codePoint.toString(),
+          color: _selectedColor.toARGB32().toString(),
+        );
+        await _repository.update(categoria);
+      }
 
-    Navigator.pop(context, true);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error al guardar la categoría: $e"),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+    }
   }
 
   @override
@@ -116,10 +156,8 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.categoria == null
-          ? 'Nueva Categoria'
-          : 'Editar Categoria',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
+          widget.category != null ? 'Editar categoría' : 'Nueva categoría',
+          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -148,8 +186,20 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
               TextField(
                 controller: _nameController,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                decoration: const InputDecoration(
-                  hintText: 'Ej. Gimnasio, Mascotas, Regalos...',
+                onChanged: (value) {
+                  setState(() {
+                    if (value.isNotEmpty && !RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$').hasMatch(value)) {
+                      _nameError = 'El nombre solo acepta letras, no números';
+                    } else {
+                      _nameError = null;
+                    }
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Ej. Gimnasio, Mascotas, Regalos',
+                  helperText: 'Nombre de la categoría para agrupar tus movimientos (solo letras).',
+                  helperMaxLines: 2,
+                  errorText: _nameError,
                 ),
               ),
               const SizedBox(height: 24),
@@ -262,7 +312,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                     },
                     child: Container(
                       decoration: BoxDecoration(
-                        color: isSelected ? _selectedColor.withOpacity(0.15) : AppColors.cardBg,
+                        color: isSelected ? _selectedColor.withAlpha(38) : AppColors.cardBg,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isSelected ? _selectedColor : AppColors.border,
@@ -293,9 +343,10 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: _colorOptions.take(5).map((color) {
+              Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: _colorOptions.map((color) {
                   bool isSelected = _selectedColor == color;
                   return GestureDetector(
                     onTap: () {
@@ -304,7 +355,6 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                       });
                     },
                     child: Container(
-                      margin: const EdgeInsets.only(right: 18),
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
@@ -317,7 +367,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                         boxShadow: [
                           if (isSelected)
                             BoxShadow(
-                              color: color.withOpacity(0.4),
+                              color: color.withAlpha(102),
                               blurRadius: 8,
                               spreadRadius: 2,
                             ),
@@ -350,9 +400,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                     elevation: 0,
                   ),
                   child: Text(
-                    widget.categoria == null
-                    ? 'Guardar categoría'
-                    : 'Actualizar Categoria',
+                    widget.category != null ? 'Guardar cambios' : 'Guardar categoría',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
